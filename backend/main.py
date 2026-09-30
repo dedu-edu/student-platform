@@ -1,13 +1,12 @@
 import os
 import uuid
 
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
-
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from supabase import create_client, Client
 
 from database import engine, Base, get_db
 import models
@@ -29,6 +28,7 @@ from auth import (
     get_current_user,
     get_current_admin
 )
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -45,6 +45,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "labs")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError(
+        "SUPABASE_URL and SUPABASE_KEY environment variables are required"
+    )
+
+supabase: Client = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY
+)
+
+
 @app.get("/")
 def root():
     return {"message": "Student Platform API is running"}
@@ -53,6 +69,7 @@ def root():
 @app.get("/users")
 def get_users(db: Session = Depends(get_db)):
     return db.query(User).all()
+
 
 @app.post("/register", response_model=UserResponse)
 def register(
@@ -94,6 +111,7 @@ def register(
 
     return new_user
 
+
 @app.post("/login", response_model=Token)
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -127,11 +145,13 @@ def login(
         "token_type": "bearer"
     }
 
+
 @app.get("/me", response_model=UserResponse)
 def get_me(
     current_user: User = Depends(get_current_user)
 ):
     return current_user
+
 
 @app.post("/admin/allowed-emails")
 def add_allowed_email(
@@ -164,6 +184,7 @@ def add_allowed_email(
         "email": email
     }
 
+
 @app.get("/admin/allowed-emails")
 def get_allowed_emails(
     current_admin: User = Depends(get_current_admin),
@@ -171,12 +192,14 @@ def get_allowed_emails(
 ):
     return db.query(models.AllowedEmail).all()
 
+
 @app.get("/subjects", response_model=list[SubjectResponse])
 def get_subjects(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     return db.query(models.Subject).all()
+
 
 @app.post("/admin/subjects", response_model=SubjectResponse)
 def create_subject(
@@ -203,6 +226,7 @@ def create_subject(
     db.refresh(new_subject)
 
     return new_subject
+
 
 @app.post("/admin/labs", response_model=LabResponse)
 def create_lab(
@@ -232,6 +256,7 @@ def create_lab(
 
     return new_lab
 
+
 @app.get("/subjects/{subject_id}/labs", response_model=list[LabResponse])
 def get_subject_labs(
     subject_id: int,
@@ -252,6 +277,7 @@ def get_subject_labs(
         models.Lab.subject_id == subject_id
     ).all()
 
+
 @app.get("/labs/{lab_id}", response_model=LabResponse)
 def get_lab(
     lab_id: int,
@@ -270,6 +296,7 @@ def get_lab(
 
     return lab
 
+
 @app.post("/admin/labs/{lab_id}/upload")
 async def upload_lab_file(
     lab_id: int,
@@ -287,15 +314,36 @@ async def upload_lab_file(
             detail="Lab not found"
         )
 
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="No filename provided"
+        )
 
     original_filename = os.path.basename(file.filename)
-    stored_filename = f"{uuid.uuid4().hex}_{original_filename}"
 
-    file_path = os.path.join(UPLOAD_DIR, stored_filename)
+    stored_filename = (
+        f"{uuid.uuid4().hex}_{original_filename}"
+    )
 
-    with open(file_path, "wb") as buffer:
-        buffer.write(await file.read())
+    file_path = stored_filename
+
+    file_data = await file.read()
+
+    try:
+        supabase.storage.from_(SUPABASE_BUCKET).upload(
+            file_path,
+            file_data,
+            {
+                "content-type": file.content_type or "application/octet-stream",
+                "upsert": "false"
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload file: {str(e)}"
+        )
 
     lab.filename = stored_filename
 
@@ -306,6 +354,7 @@ async def upload_lab_file(
         "message": "File uploaded successfully",
         "filename": original_filename
     }
+
 
 @app.get("/labs/{lab_id}/download")
 def download_lab_file(
@@ -329,18 +378,37 @@ def download_lab_file(
             detail="This lab does not have a file"
         )
 
-    file_path = os.path.join(UPLOAD_DIR, lab.filename)
-
-    if not os.path.isfile(file_path):
+    try:
+        file_data = supabase.storage.from_(
+            SUPABASE_BUCKET
+        ).download(lab.filename)
+    except Exception:
         raise HTTPException(
             status_code=404,
             detail="File not found"
         )
 
-    return FileResponse(
-        path=file_path,
-        filename=lab.filename.split("_", 1)[1]
+    if not file_data:
+        raise HTTPException(
+            status_code=404,
+            detail="File not found"
+        )
+
+    if "_" in lab.filename:
+        original_filename = lab.filename.split("_", 1)[1]
+    else:
+        original_filename = lab.filename
+
+    return Response(
+        content=file_data,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{original_filename}"'
+            )
+        }
     )
+
 
 @app.put("/admin/labs/{lab_id}", response_model=LabResponse)
 def update_lab(
@@ -378,6 +446,7 @@ def update_lab(
 
     return existing_lab
 
+
 @app.put("/admin/labs/{lab_id}/file")
 async def update_lab_file(
     lab_id: int,
@@ -395,13 +464,13 @@ async def update_lab_file(
             detail="Lab not found"
         )
 
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="No filename provided"
+        )
 
-    if lab.filename:
-        old_file_path = os.path.join(UPLOAD_DIR, lab.filename)
-
-        if os.path.isfile(old_file_path):
-            os.remove(old_file_path)
+    old_filename = lab.filename
 
     original_filename = os.path.basename(file.filename)
 
@@ -409,10 +478,30 @@ async def update_lab_file(
         f"{uuid.uuid4().hex}_{original_filename}"
     )
 
-    file_path = os.path.join(UPLOAD_DIR, stored_filename)
+    file_data = await file.read()
 
-    with open(file_path, "wb") as buffer:
-        buffer.write(await file.read())
+    try:
+        supabase.storage.from_(SUPABASE_BUCKET).upload(
+            stored_filename,
+            file_data,
+            {
+                "content-type": file.content_type or "application/octet-stream",
+                "upsert": "false"
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload file: {str(e)}"
+        )
+
+    if old_filename:
+        try:
+            supabase.storage.from_(
+                SUPABASE_BUCKET
+            ).remove([old_filename])
+        except Exception:
+            pass
 
     lab.filename = stored_filename
 

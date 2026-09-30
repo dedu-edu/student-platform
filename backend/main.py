@@ -1,6 +1,8 @@
 import os
 import uuid
 
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
+
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
@@ -35,7 +37,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173",
+        # "https://YOUR-VERCEL-DOMAIN.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -284,15 +287,12 @@ async def upload_lab_file(
             detail="Lab not found"
         )
 
-    os.makedirs("uploads", exist_ok=True)
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
 
     original_filename = os.path.basename(file.filename)
     stored_filename = f"{uuid.uuid4().hex}_{original_filename}"
 
-    file_path = os.path.join(
-        "uploads",
-        stored_filename
-    )
+    file_path = os.path.join(UPLOAD_DIR, stored_filename)
 
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
@@ -329,10 +329,7 @@ def download_lab_file(
             detail="This lab does not have a file"
         )
 
-    file_path = os.path.join(
-        "uploads",
-        lab.filename
-    )
+    file_path = os.path.join(UPLOAD_DIR, lab.filename)
 
     if not os.path.isfile(file_path):
         raise HTTPException(
@@ -398,13 +395,10 @@ async def update_lab_file(
             detail="Lab not found"
         )
 
-    os.makedirs("uploads", exist_ok=True)
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
 
     if lab.filename:
-        old_file_path = os.path.join(
-            "uploads",
-            lab.filename
-        )
+        old_file_path = os.path.join(UPLOAD_DIR, lab.filename)
 
         if os.path.isfile(old_file_path):
             os.remove(old_file_path)
@@ -415,10 +409,7 @@ async def update_lab_file(
         f"{uuid.uuid4().hex}_{original_filename}"
     )
 
-    file_path = os.path.join(
-        "uploads",
-        stored_filename
-    )
+    file_path = os.path.join(UPLOAD_DIR, stored_filename)
 
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())

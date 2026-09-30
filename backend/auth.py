@@ -1,5 +1,8 @@
+import os
 import bcrypt
+
 from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
 
 from jose import jwt, JWTError
 from fastapi import Depends, HTTPException, status
@@ -9,13 +12,13 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
+load_dotenv()
 
-SECRET_KEY = "6ebdbffd9d2d2e5dfaa7c24657b1e87239d20c77626fc49225e13e348e469ef1"
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
-
 
 def hash_password(password: str) -> str:
     password_bytes = password.encode("utf-8")

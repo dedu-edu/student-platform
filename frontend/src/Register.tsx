@@ -1,5 +1,5 @@
-import { FormEvent, useState } from "react";
-
+import { useState } from "react";
+import type { FormEvent } from "react";
 interface RegisterProps {
   onRegister: (
     username: string,

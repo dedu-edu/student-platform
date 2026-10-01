@@ -109,14 +109,14 @@
     display: inline-block;
     margin-bottom: 7px;
     color: #475569;
-    font-size: 14px;
+    font-size: 20px;
     font-weight: 650;
   }
   
   input,
   textarea,
   select {
-    width: 100%;
+    width: 45%;
     padding: 12px 14px;
     color: #1e293b;
     background: #f8fafc;

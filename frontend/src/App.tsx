@@ -1,6 +1,7 @@
 import { useState } from "react"
 import "./App.css"
-
+import Register from "./Register";
+const [showRegister, setShowRegister] = useState(false);
 const API_URL = import.meta.env.VITE_API_URL;
 
 type User = {
@@ -48,6 +49,34 @@ function App() {
   const [editLabDescription, setEditLabDescription] = useState("")
   const [editLabSubjectId, setEditLabSubjectId] = useState("")
   const [editLabFile, setEditLabFile] = useState<File | null>(null)
+
+  const handleRegister = async (
+    username: string,
+    email: string,
+    password: string
+  ) => {
+    const response = await fetch(`${API_URL}/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username,
+        email,
+        password,
+      }),
+    });
+  
+    const data = await response.json();
+  
+    if (!response.ok) {
+      throw new Error(data.detail || "Registration failed");
+    }
+  
+    alert("Registration successful! You can now log in.");
+  
+    setShowRegister(false);
+  };
 
   async function handleLogin(event: React.FormEvent) {
     event.preventDefault()
@@ -482,15 +511,23 @@ function App() {
   }
 
   if (!user) {
+    if (showRegister) {
+      return (
+        <Register
+          onRegister={handleRegister}
+          onBackToLogin={() => setShowRegister(false)}
+        />
+      );
+    }
+  
     return (
       <div>
         <h1>Student Platform</h1>
-
+  
         <form onSubmit={handleLogin}>
           <div>
             <label>Username</label>
             <br />
-
             <input
               type="text"
               value={username}
@@ -499,13 +536,12 @@ function App() {
               }
             />
           </div>
-
+  
           <br />
-
+  
           <div>
             <label>Password</label>
             <br />
-
             <input
               type="password"
               value={password}
@@ -514,17 +550,26 @@ function App() {
               }
             />
           </div>
-
+  
           <br />
-
+  
           <button type="submit">
             Login
           </button>
         </form>
-
+  
         <p>{message}</p>
+  
+        <hr />
+  
+        <button
+          type="button"
+          onClick={() => setShowRegister(true)}
+        >
+          Create Account
+        </button>
       </div>
-    )
+    );
   }
 
   if (user.is_admin) {

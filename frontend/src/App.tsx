@@ -1,7 +1,6 @@
 import { useState } from "react"
 import "./App.css"
 import Register from "./Register";
-const [showRegister, setShowRegister] = useState(false);
 const API_URL = import.meta.env.VITE_API_URL;
 
 type User = {
@@ -49,6 +48,7 @@ function App() {
   const [editLabDescription, setEditLabDescription] = useState("")
   const [editLabSubjectId, setEditLabSubjectId] = useState("")
   const [editLabFile, setEditLabFile] = useState<File | null>(null)
+  const [showRegister, setShowRegister] = useState(false);
 
   const handleRegister = async (
     username: string,
@@ -81,12 +81,27 @@ function App() {
   async function handleLogin(event: React.FormEvent) {
     event.preventDefault()
     setMessage("")
-
+  
+    if (!username.trim() && !password.trim()) {
+      setMessage("Please enter your username and password")
+      return
+    }
+  
+    if (!username.trim()) {
+      setMessage("Please enter your username")
+      return
+    }
+  
+    if (!password) {
+      setMessage("Please enter your password")
+      return
+    }
+  
     const formData = new URLSearchParams()
-
+  
     formData.append("username", username)
     formData.append("password", password)
-
+  
     try {
       const response = await fetch(
         `${API_URL}/login`,
@@ -98,16 +113,16 @@ function App() {
           body: formData
         }
       )
-
+  
       const data = await response.json()
-
+  
       if (!response.ok) {
         setMessage(data.detail || "Login failed")
         return
       }
-
+  
       localStorage.setItem("token", data.access_token)
-
+  
       const meResponse = await fetch(
         `${API_URL}/me`,
         {
@@ -116,18 +131,18 @@ function App() {
           }
         }
       )
-
+  
       const meData = await meResponse.json()
-
+  
       if (!meResponse.ok) {
         setMessage("Could not get user information")
         return
       }
-
+  
       setUser(meData)
-
+  
       await loadSubjects(data.access_token)
-
+  
     } catch (error) {
       setMessage("Could not connect to server")
       console.error(error)
@@ -534,6 +549,7 @@ function App() {
               onChange={(event) =>
                 setUsername(event.target.value)
               }
+              required
             />
           </div>
   
@@ -548,6 +564,7 @@ function App() {
               onChange={(event) =>
                 setPassword(event.target.value)
               }
+              required
             />
           </div>
   

@@ -512,3 +512,30 @@ async def update_lab_file(
         "message": "File updated successfully",
         "filename": original_filename
     }
+
+@app.put("/admin/users/{user_id}/make-admin")
+def make_user_admin(
+    user_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(
+        User.id == user_id
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    user.is_admin = True
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "message": "User is now an admin",
+        "username": user.username,
+        "email": user.email
+    }

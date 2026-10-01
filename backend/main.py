@@ -256,6 +256,75 @@ def create_lab(
 
     return new_lab
 
+@app.put("/admin/subjects/{subject_id}", response_model=SubjectResponse)
+def update_subject(
+    subject_id: int,
+    data: SubjectCreate,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    subject = db.query(models.Subject).filter(
+        models.Subject.id == subject_id
+    ).first()
+
+    if not subject:
+        raise HTTPException(
+            status_code=404,
+            detail="Subject not found"
+        )
+
+    new_name = data.name.strip()
+
+    if not new_name:
+        raise HTTPException(
+            status_code=400,
+            detail="Subject name cannot be empty"
+        )
+
+    existing_subject = db.query(models.Subject).filter(
+        models.Subject.name == new_name,
+        models.Subject.id != subject_id
+    ).first()
+
+    if existing_subject:
+        raise HTTPException(
+            status_code=400,
+            detail="Subject already exists"
+        )
+
+    subject.name = new_name
+
+    db.commit()
+    db.refresh(subject)
+
+    return subject
+
+@app.delete("/admin/subjects/{subject_id}")
+def delete_subject(
+    subject_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    subject = db.query(models.Subject).filter(
+        models.Subject.id == subject_id
+    ).first()
+
+    if not subject:
+        raise HTTPException(
+            status_code=404,
+            detail="Subject not found"
+        )
+
+    db.query(models.Lab).filter(
+        models.Lab.subject_id == subject_id
+    ).delete(synchronize_session=False)
+
+    db.delete(subject)
+    db.commit()
+
+    return {
+        "message": "Subject and its labs deleted successfully"
+    }
 
 @app.get("/subjects/{subject_id}/labs", response_model=list[LabResponse])
 def get_subject_labs(

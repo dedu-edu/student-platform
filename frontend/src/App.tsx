@@ -49,6 +49,8 @@ function App() {
   const [editLabSubjectId, setEditLabSubjectId] = useState("")
   const [editLabFile, setEditLabFile] = useState<File | null>(null)
   const [showRegister, setShowRegister] = useState(false);
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null)
+  const [editSubjectName, setEditSubjectName] = useState("")
 
   const handleRegister = async (
     username: string,
@@ -290,7 +292,6 @@ function App() {
         })
       }
     )
-
     const data = await response.json()
 
     if (!response.ok) {
@@ -301,6 +302,95 @@ function App() {
     setMessage("Subject created successfully!")
     setNewSubjectName("")
 
+    await loadSubjects(token)
+  }
+
+  async function updateSubject(event: React.FormEvent) {
+    event.preventDefault()
+  
+    const token = localStorage.getItem("token")
+  
+    if (!token || !editingSubject) {
+      return
+    }
+  
+    if (!editSubjectName.trim()) {
+      setMessage("Subject name cannot be empty")
+      return
+    }
+  
+    const response = await fetch(
+      `${API_URL}/admin/subjects/${editingSubject.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: editSubjectName.trim()
+        })
+      }
+    )
+  
+    const data = await response.json()
+  
+    if (!response.ok) {
+      setMessage(data.detail || "Could not update subject")
+      return
+    }
+  
+    setMessage("Subject updated successfully!")
+  
+    setEditingSubject(null)
+    setEditSubjectName("")
+  
+    await loadSubjects(token)
+  }
+
+  async function deleteSubject(subject: Subject) {
+    const token = localStorage.getItem("token")
+  
+    if (!token) {
+      return
+    }
+  
+    const confirmed = window.confirm(
+      `Delete "${subject.name}"?\n\nThis will also delete all labs belonging to this subject.`
+    )
+  
+    if (!confirmed) {
+      return
+    }
+  
+    const response = await fetch(
+      `${API_URL}/admin/subjects/${subject.id}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    )
+  
+    const data = await response.json()
+  
+    if (!response.ok) {
+      setMessage(data.detail || "Could not delete subject")
+      return
+    }
+  
+    setMessage("Subject deleted successfully!")
+  
+    if (
+      selectedSubject &&
+      selectedSubject.id === subject.id
+    ) {
+      setSelectedSubject(null)
+      setLabs([])
+      setSelectedLab(null)
+    }
+  
     await loadSubjects(token)
   }
 
@@ -714,17 +804,53 @@ function App() {
         ) : (
           subjects.map((subject) => (
             <div key={subject.id}>
-              <p>
-                📚 <strong>{subject.name}</strong>
-              </p>
+              {editingSubject?.id === subject.id ? (
+                <form onSubmit={updateSubject}>
+                  <input
+                    type="text"
+                    value={editSubjectName}
+                    onChange={(event) =>
+                      setEditSubjectName(event.target.value)
+                    }
+                  />
 
-              <button
-                onClick={() =>
-                  loadAdminLabsForSubject(subject.id)
-                }
-              >
-                Show Labs
-              </button>
+                  <button type="submit">
+                    Save
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingSubject(null)
+                      setEditSubjectName("")
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <strong>
+                    📚 {subject.name}
+                  </strong>
+
+                  <button
+                    onClick={() => {
+                      setEditingSubject(subject)
+                      setEditSubjectName(subject.name)
+                      setMessage("")
+                    }}
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    onClick={() => deleteSubject(subject)}
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
 
               <hr />
             </div>

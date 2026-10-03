@@ -48,13 +48,13 @@ export default function Register({
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1>Create Account</h1>
+        <h1>Бүртгэл үүсгэх</h1>
         <p>Join the Student Platform</p>
 
         <form onSubmit={handleSubmit}>
           <input
             type="text"
-            placeholder="Username"
+            placeholder="Хэрэглэгчийн нэр"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
@@ -70,7 +70,7 @@ export default function Register({
 
           <input
             type="password"
-            placeholder="Password"
+            placeholder="Нууц үг"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -78,7 +78,7 @@ export default function Register({
 
           <input
             type="password"
-            placeholder="Confirm Password"
+            placeholder="Нууц үг дахин бичих"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
@@ -91,18 +91,18 @@ export default function Register({
           )}
 
           <button type="submit" disabled={loading}>
-            {loading ? "Creating account..." : "Register"}
+            {loading ? "Бүртгэл үүсгэж байна..." : "Бүртгүүлэх"}
           </button>
         </form>
 
         <div className="auth-switch">
-          Already have an account?{" "}
+          Аль хэдийн Account-тай?{" "}
           <button
             type="button"
             onClick={onBackToLogin}
             className="text-button"
           >
-            Login
+            Нэвтрэх
           </button>
         </div>
       </div>

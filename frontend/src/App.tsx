@@ -72,10 +72,10 @@ function App() {
     const data = await response.json();
   
     if (!response.ok) {
-      throw new Error(data.detail || "Registration failed");
+      throw new Error(data.detail || "Бүртгүүлэх боломжгүй");
     }
   
-    alert("Registration successful! You can now log in.");
+    alert("Амжилттай бүртгүүллээ!!");
   
     setShowRegister(false);
   };
@@ -85,17 +85,17 @@ function App() {
     setMessage("")
   
     if (!username.trim() && !password.trim()) {
-      setMessage("Please enter your username and password")
+      setMessage("Хэрэглэгчийн нэр болон нууц үгээ оруулна уу!")
       return
     }
   
     if (!username.trim()) {
-      setMessage("Please enter your username")
+      setMessage("Хэрэглэгчийн нэрээ оруулна уу!")
       return
     }
   
     if (!password) {
-      setMessage("Please enter your password")
+      setMessage("Нууц үгээ оруулна уу!")
       return
     }
   
@@ -119,7 +119,7 @@ function App() {
       const data = await response.json()
   
       if (!response.ok) {
-        setMessage(data.detail || "Login failed")
+        setMessage(data.detail || "Нэвтэрч чадсангүй.")
         return
       }
   
@@ -137,7 +137,7 @@ function App() {
       const meData = await meResponse.json()
   
       if (!meResponse.ok) {
-        setMessage("Could not get user information")
+        setMessage("Хэрэглэгчийн мэдээлэл олдсонгүй")
         return
       }
   
@@ -146,7 +146,7 @@ function App() {
       await loadSubjects(data.access_token)
   
     } catch (error) {
-      setMessage("Could not connect to server")
+      setMessage("Сервертэй холбогдож чадсангүй")
       console.error(error)
     }
   }
@@ -164,7 +164,7 @@ function App() {
     const data = await response.json()
 
     if (!response.ok) {
-      setMessage(data.detail || "Could not load subjects")
+      setMessage(data.detail || "Хичээлүүдийг загсааж чадсангүй.")
       return
     }
 
@@ -190,7 +190,7 @@ function App() {
     const data = await response.json()
 
     if (!response.ok) {
-      setMessage(data.detail || "Could not load labs")
+      setMessage(data.detail || "Лабуудыг загсааж чадсангүй")
       return
     }
 
@@ -218,7 +218,7 @@ function App() {
     const data = await response.json()
 
     if (!response.ok) {
-      setMessage(data.detail || "Could not load lab")
+      setMessage(data.detail || "Лабуудыг загсааж чадсангүй")
       return
     }
 
@@ -244,7 +244,7 @@ function App() {
 
       if (!response.ok) {
         const data = await response.json()
-        setMessage(data.detail || "Download failed")
+        setMessage(data.detail || "Суулгаж чадсангүй")
         return
       }
 
@@ -265,7 +265,7 @@ function App() {
       window.URL.revokeObjectURL(downloadUrl)
 
     } catch (error) {
-      setMessage("Could not download file")
+      setMessage("Суулгаж чадсангүй")
       console.error(error)
     }
   }
@@ -295,11 +295,11 @@ function App() {
     const data = await response.json()
 
     if (!response.ok) {
-      setMessage(data.detail || "Could not create subject")
+      setMessage(data.detail || "Хичээл үүсгэж чадсангүй.")
       return
     }
 
-    setMessage("Subject created successfully!")
+    setMessage("Шинэ хичээл үүсгэлээ!")
     setNewSubjectName("")
 
     await loadSubjects(token)
@@ -315,7 +315,7 @@ function App() {
     }
   
     if (!editSubjectName.trim()) {
-      setMessage("Subject name cannot be empty")
+      setMessage("Хичээлийн нэр хоосон байж болохгүй.")
       return
     }
   
@@ -336,11 +336,11 @@ function App() {
     const data = await response.json()
   
     if (!response.ok) {
-      setMessage(data.detail || "Could not update subject")
+      setMessage(data.detail || "Хичээллийг шинэчилж чадсангүй")
       return
     }
   
-    setMessage("Subject updated successfully!")
+    setMessage("Амжилттай шинэчиллээ!")
   
     setEditingSubject(null)
     setEditSubjectName("")
@@ -356,7 +356,7 @@ function App() {
     }
   
     const confirmed = window.confirm(
-      `Delete "${subject.name}"?\n\nThis will also delete all labs belonging to this subject.`
+      `Устгах "${subject.name}"?\n\n Мөн энэ хичээлтэй холбоотой бүх file-уудыг устгах болно. Итгэлтэй байна уу? .`
     )
   
     if (!confirmed) {
@@ -376,11 +376,11 @@ function App() {
     const data = await response.json()
   
     if (!response.ok) {
-      setMessage(data.detail || "Could not delete subject")
+      setMessage(data.detail || "Устгаж чадсангүй.")
       return
     }
   
-    setMessage("Subject deleted successfully!")
+    setMessage("Амжилттай устгагдлаа!")
   
     if (
       selectedSubject &&
@@ -404,7 +404,7 @@ function App() {
     }
 
     if (!newLabSubjectId || !newLabTitle.trim()) {
-      setMessage("Please select a subject and enter a title")
+      setMessage("Хичээлийн нэр оруулна уу!")
       return
     }
 
@@ -427,14 +427,14 @@ function App() {
     const data = await response.json()
 
     if (!response.ok) {
-      setMessage(data.detail || "Could not create lab")
+      setMessage(data.detail || "Лаб үүсгэж чадсангүй.")
       return
     }
 
     if (labFile) {
       await uploadFile(data.id, token)
     } else {
-      setMessage("Lab created successfully!")
+      setMessage("Амжилттай лаб үүсгэж чадлаа!")
     }
 
     setNewLabTitle("")
@@ -469,12 +469,12 @@ function App() {
 
     if (!response.ok) {
       setMessage(
-        data.detail || "Lab created, but file upload failed"
+        data.detail || "file байрлуулж чадсангүй."
       )
       return
     }
 
-    setMessage("Lab and file uploaded successfully!")
+    setMessage("File байрлуулж чадлаа!")
   }
 
   async function loadAdminLabsForSubject(subjectId: number) {
@@ -496,7 +496,7 @@ function App() {
     const data = await response.json()
 
     if (!response.ok) {
-      setMessage(data.detail || "Could not load labs")
+      setMessage(data.detail || "Лабуудыг загсааж чадсангүй")
       return
     }
 
@@ -528,7 +528,7 @@ function App() {
     }
 
     if (!editLabSubjectId || !editLabTitle.trim()) {
-      setMessage("Please select a subject and enter a title")
+      setMessage("Аль нэг хичээллийг сонгоно уу.")
       return
     }
 
@@ -551,7 +551,7 @@ function App() {
     const data = await response.json()
 
     if (!response.ok) {
-      setMessage(data.detail || "Could not update lab")
+      setMessage(data.detail || "Лабыг байршуулж чадсангүй.")
       return
     }
 
@@ -573,13 +573,13 @@ function App() {
 
       if (!fileResponse.ok) {
         setMessage(
-          "Lab updated, but file replacement failed"
+          "file-ыг шинэчилж чадсангүй"
         )
         return
       }
     }
 
-    setMessage("Lab updated successfully!")
+    setMessage("Лабыг шинэчиллээ!")
 
     setEditingLab(null)
     setEditLabFile(null)
@@ -627,11 +627,11 @@ function App() {
   
     return (
       <div>
-        <h1>Student Platform</h1>
+        <h1>Оюутны platform</h1>
   
         <form onSubmit={handleLogin}>
           <div>
-            <label>Username</label>
+            <label>Бүртгүүлсэн нэр</label>
             <br />
             <input
               type="text"
@@ -646,7 +646,7 @@ function App() {
           <br />
   
           <div>
-            <label>Password</label>
+            <label>Нууц үг</label>
             <br />
             <input
               type="password"
@@ -661,7 +661,7 @@ function App() {
           <br />
   
           <button type="submit">
-            Login
+            Нэвтрэх
           </button>
         </form>
   
@@ -673,7 +673,7 @@ function App() {
           type="button"
           onClick={() => setShowRegister(true)}
         >
-          Create Account
+          Бүртгүүлэх
         </button>
       </div>
     );
@@ -682,24 +682,24 @@ function App() {
   if (user.is_admin) {
     return (
       <div>
-        <h1>Admin Dashboard</h1>
+        <h1>Админ dashboard</h1>
 
         <p>
-          Welcome, <strong>{user.username}</strong>!
+          Тавтай морил, <strong>{user.username}</strong>!
         </p>
 
         <button onClick={logout}>
-          Logout
+          Бүртгэлээс гарах
         </button>
 
         <hr />
 
-        <h2>Add Subject</h2>
+        <h2>Хичээл нэмэх</h2>
 
         <form onSubmit={createSubject}>
           <input
             type="text"
-            placeholder="Subject name"
+            placeholder="Хичээллийн нэр"
             value={newSubjectName}
             onChange={(event) =>
               setNewSubjectName(event.target.value)
@@ -707,17 +707,17 @@ function App() {
           />
 
           <button type="submit">
-            Add Subject
+            хичээлийг нэмэх
           </button>
         </form>
 
         <hr />
 
-        <h2>Add Lab</h2>
+        <h2>Лаб нэмэх</h2>
 
         <form onSubmit={createLab}>
           <div>
-            <label>Subject</label>
+            <label>Хичээл</label>
             <br />
 
             <select
@@ -727,7 +727,7 @@ function App() {
               }
             >
               <option value="">
-                Select a subject
+                Хичээлийг сонгоно уу
               </option>
 
               {subjects.map((subject) => (
@@ -744,7 +744,7 @@ function App() {
           <br />
 
           <div>
-            <label>Lab Title</label>
+            <label>Лабын нэр</label>
             <br />
 
             <input
@@ -760,11 +760,11 @@ function App() {
           <br />
 
           <div>
-            <label>Description</label>
+            <label>Тайлбар</label>
             <br />
 
             <textarea
-              placeholder="Lab description"
+              placeholder="Лабын тайлбар"
               value={newLabDescription}
               onChange={(event) =>
                 setNewLabDescription(event.target.value)
@@ -775,7 +775,7 @@ function App() {
           <br />
 
           <div>
-            <label>Lab File</label>
+            <label>Лабын file</label>
             <br />
 
             <input
@@ -791,16 +791,16 @@ function App() {
           <br />
 
           <button type="submit">
-            Create Lab
+            Лабыг нэмэх
           </button>
         </form>
 
         <hr />
 
-        <h2>Current Subjects</h2>
+        <h2>Одоогоор байгаа хичээллүүд</h2>
 
         {subjects.length === 0 ? (
-          <p>No subjects yet.</p>
+          <p>Хичээл алга.</p>
         ) : (
           subjects.map((subject) => (
             <div key={subject.id}>
@@ -815,7 +815,7 @@ function App() {
                   />
 
                   <button type="submit">
-                    Save
+                    хадгалах
                   </button>
 
                   <button
@@ -825,7 +825,7 @@ function App() {
                       setEditSubjectName("")
                     }}
                   >
-                    Cancel
+                    Цуцлах
                   </button>
                 </form>
               ) : (
@@ -841,13 +841,13 @@ function App() {
                       setMessage("")
                     }}
                   >
-                    Edit
+                    Шинэчлэх
                   </button>
 
                   <button
                     onClick={() => deleteSubject(subject)}
                   >
-                    Delete
+                    Устгах
                   </button>
                 </>
               )}
@@ -859,7 +859,7 @@ function App() {
 
         {adminLabs.length > 0 && (
           <>
-            <h2>Labs</h2>
+            <h2>Лабууд</h2>
 
             {adminLabs.map((lab) => (
               <div key={lab.id}>
@@ -877,7 +877,7 @@ function App() {
                         .split("_")
                         .slice(1)
                         .join("_")}`
-                    : "No file uploaded"}
+                    : "file оруулаагүй"}
                 </p>
 
                 <button
@@ -885,7 +885,7 @@ function App() {
                     startEditingLab(lab)
                   }
                 >
-                  Edit
+                  Шинэчлэх
                 </button>
 
                 <hr />
@@ -898,11 +898,11 @@ function App() {
           <>
             <hr />
 
-            <h2>Edit Lab</h2>
+            <h2>Лабыг шинэчлэх</h2>
 
             <form onSubmit={updateLab}>
               <div>
-                <label>Subject</label>
+                <label>Хичээл</label>
                 <br />
 
                 <select
@@ -927,7 +927,7 @@ function App() {
               <br />
 
               <div>
-                <label>Lab Title</label>
+                <label>Лабын нэр</label>
                 <br />
 
                 <input
@@ -944,7 +944,7 @@ function App() {
               <br />
 
               <div>
-                <label>Description</label>
+                <label>Тайлбар</label>
                 <br />
 
                 <textarea
@@ -961,7 +961,7 @@ function App() {
 
               <div>
                 <label>
-                  Replace File
+                  File-ыг солих
                 </label>
                 <br />
 
@@ -978,7 +978,7 @@ function App() {
               <br />
 
               <button type="submit">
-                Save Changes
+                Хадгалах
               </button>
 
               {" "}
@@ -987,7 +987,7 @@ function App() {
                 type="button"
                 onClick={cancelEditingLab}
               >
-                Cancel
+                Цуцлах
               </button>
             </form>
           </>
@@ -1004,7 +1004,7 @@ function App() {
         <h1>Student Platform</h1>
 
         <button onClick={backToLabs}>
-          ← Back to Labs
+          ← Лабууд руу буцах
         </button>
 
         <h2>{selectedLab.title}</h2>
@@ -1015,14 +1015,14 @@ function App() {
 
         {selectedLab.filename ? (
           <>
-            <p>📎 File available</p>
+            <p>📎 Бэлэн байгаа file-ууд</p>
 
             <button onClick={downloadLab}>
-              Download File
+              file-ыг суулгах
             </button>
           </>
         ) : (
-          <p>No file uploaded yet.</p>
+          <p>Ямарч лаб оруулаагүй байна.</p>
         )}
 
         <p>{message}</p>
@@ -1036,13 +1036,13 @@ function App() {
         <h1>Student Platform</h1>
 
         <button onClick={backToSubjects}>
-          ← Back to Subjects
+          ← Хичээл руу буцах
         </button>
 
         <h2>{selectedSubject.name}</h2>
 
         {labs.length === 0 ? (
-          <p>No labs available.</p>
+          <p>Ямарч лаб байхгүй байна.</p>
         ) : (
           labs.map((lab) => (
             <div key={lab.id}>
@@ -1067,19 +1067,19 @@ function App() {
       <h1>Student Platform</h1>
 
       <p>
-        Welcome, <strong>{user.username}</strong>!
+        Тавтай морил, <strong>{user.username}</strong>!
       </p>
 
       <button onClick={logout}>
-        Logout
+        Бүртгэлээс гарах
       </button>
 
       <hr />
 
-      <h2>Subjects</h2>
+      <h2>Хичээлүүд</h2>
 
       {subjects.length === 0 ? (
-        <p>No subjects available.</p>
+        <p>Ямарч хичээл алга.</p>
       ) : (
         subjects.map((subject) => (
           <div key={subject.id}>

@@ -1,6 +1,7 @@
 import { useState } from "react"
 import "./App.css"
 import Register from "./Register";
+import AdminUsers from "./AdminUsers";
 const API_URL = import.meta.env.VITE_API_URL;
 
 type User = {
@@ -9,6 +10,15 @@ type User = {
   email: string
   is_admin: boolean
 }
+
+type AdminTab = "subjects" | "labs" | "users" | "emails"
+
+const ADMIN_TABS: { id: AdminTab; label: string }[] = [
+  { id: "subjects", label: "Хичээлүүд" },
+  { id: "labs", label: "Лабууд" },
+  { id: "users", label: "Хэрэглэгчид" },
+  { id: "emails", label: "И-мэйлүүд" },
+]
 
 type Subject = {
   id: number
@@ -49,6 +59,7 @@ function App() {
   const [editLabSubjectId, setEditLabSubjectId] = useState("")
   const [editLabFile, setEditLabFile] = useState<File | null>(null)
   const [showRegister, setShowRegister] = useState(false);
+  const [adminTab, setAdminTab] = useState<AdminTab>("subjects")
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null)
   const [editSubjectName, setEditSubjectName] = useState("")
 
@@ -682,315 +693,325 @@ function App() {
   if (user.is_admin) {
     return (
       <div>
-        <h1>Админ dashboard</h1>
+        <header className="topbar">
+          <h1>Админ dashboard</h1>
 
-        <p>
-          Тавтай морил, <strong>{user.username}</strong>!
-        </p>
+          <div className="topbar-right">
+            <span className="topbar-user">
+              Тавтай морил, <strong>{user.username}</strong>!
+            </span>
 
-        <button onClick={logout}>
-          Бүртгэлээс гарах
-        </button>
+            <button onClick={logout}>
+              Бүртгэлээс гарах
+            </button>
+          </div>
+        </header>
 
-        <hr />
-
-        <h2>Хичээл нэмэх</h2>
-
-        <form onSubmit={createSubject}>
-          <input
-            type="text"
-            placeholder="Хичээллийн нэр"
-            value={newSubjectName}
-            onChange={(event) =>
-              setNewSubjectName(event.target.value)
-            }
-          />
-
-          <button type="submit">
-            хичээлийг нэмэх
-          </button>
-        </form>
-
-        <hr />
-
-        <h2>Лаб нэмэх</h2>
-
-        <form onSubmit={createLab}>
-          <div>
-            <label>Хичээл</label>
-            <br />
-
-            <select
-              value={newLabSubjectId}
-              onChange={(event) =>
-                setNewLabSubjectId(event.target.value)
-              }
+        <nav className="tabs" role="tablist" aria-label="Админ цэс">
+          {ADMIN_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={adminTab === tab.id}
+              className={adminTab === tab.id ? "tab active" : "tab"}
+              onClick={() => {
+                setAdminTab(tab.id)
+                setMessage("")
+              }}
             >
-              <option value="">
-                Хичээлийг сонгоно уу
-              </option>
+              {tab.label}
+            </button>
+          ))}
+        </nav>
 
-              {subjects.map((subject) => (
-                <option
-                  key={subject.id}
-                  value={subject.id}
-                >
-                  {subject.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        {adminTab === "subjects" && (
+          <section className="win">
+            <h2 className="win-title">Хичээлүүд</h2>
 
-          <br />
+            <div className="win-body">
+              <form className="inline-form" onSubmit={createSubject}>
+                <input
+                  type="text"
+                  placeholder="Хичээллийн нэр"
+                  value={newSubjectName}
+                  onChange={(event) =>
+                    setNewSubjectName(event.target.value)
+                  }
+                />
 
-          <div>
-            <label>Лабын нэр</label>
-            <br />
+                <button type="submit">
+                  хичээлийг нэмэх
+                </button>
+              </form>
 
-            <input
-              type="text"
-              placeholder="Lab 1 - Introduction"
-              value={newLabTitle}
-              onChange={(event) =>
-                setNewLabTitle(event.target.value)
-              }
-            />
-          </div>
+              {subjects.length === 0 ? (
+                <p>Хичээл алга.</p>
+              ) : (
+                <ul className="admin-list">
+                  {subjects.map((subject) => (
+                    <li key={subject.id}>
+                      {editingSubject?.id === subject.id ? (
+                        <form
+                          className="inline-form"
+                          onSubmit={updateSubject}
+                        >
+                          <input
+                            type="text"
+                            value={editSubjectName}
+                            onChange={(event) =>
+                              setEditSubjectName(event.target.value)
+                            }
+                          />
 
-          <br />
+                          <button type="submit">
+                            хадгалах
+                          </button>
 
-          <div>
-            <label>Тайлбар</label>
-            <br />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingSubject(null)
+                              setEditSubjectName("")
+                            }}
+                          >
+                            Цуцлах
+                          </button>
+                        </form>
+                      ) : (
+                        <>
+                          <span className="admin-list-main">
+                            {subject.name}
+                          </span>
 
-            <textarea
-              placeholder="Лабын тайлбар"
-              value={newLabDescription}
-              onChange={(event) =>
-                setNewLabDescription(event.target.value)
-              }
-            />
-          </div>
+                          <span className="row-actions">
+                            <button
+                              onClick={() => {
+                                setEditingSubject(subject)
+                                setEditSubjectName(subject.name)
+                                setMessage("")
+                              }}
+                            >
+                              Шинэчлэх
+                            </button>
 
-          <br />
+                            <button
+                              onClick={() => deleteSubject(subject)}
+                            >
+                              Устгах
+                            </button>
+                          </span>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        )}
 
-          <div>
-            <label>Лабын file</label>
-            <br />
+        {adminTab === "labs" && (
+          <section className="win">
+            <h2 className="win-title">
+              {editingLab ? "Лабыг шинэчлэх" : "Лабууд"}
+            </h2>
 
-            <input
-              type="file"
-              onChange={(event) =>
-                setLabFile(
-                  event.target.files?.[0] || null
-                )
-              }
-            />
-          </div>
+            <div className="win-body">
+              {editingLab ? (
+                <form className="form-grid" onSubmit={updateLab}>
+                  <div>
+                    <label>Хичээл</label>
 
-          <br />
+                    <select
+                      value={editLabSubjectId}
+                      onChange={(event) =>
+                        setEditLabSubjectId(event.target.value)
+                      }
+                    >
+                      {subjects.map((subject) => (
+                        <option
+                          key={subject.id}
+                          value={subject.id}
+                        >
+                          {subject.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-          <button type="submit">
-            Лабыг нэмэх
-          </button>
-        </form>
+                  <div>
+                    <label>Лабын нэр</label>
 
-        <hr />
+                    <input
+                      type="text"
+                      value={editLabTitle}
+                      onChange={(event) =>
+                        setEditLabTitle(event.target.value)
+                      }
+                    />
+                  </div>
 
-        <h2>Одоогоор байгаа хичээллүүд</h2>
+                  <div className="span-2">
+                    <label>Тайлбар</label>
 
-        {subjects.length === 0 ? (
-          <p>Хичээл алга.</p>
-        ) : (
-          subjects.map((subject) => (
-            <div key={subject.id}>
-              {editingSubject?.id === subject.id ? (
-                <form onSubmit={updateSubject}>
-                  <input
-                    type="text"
-                    value={editSubjectName}
-                    onChange={(event) =>
-                      setEditSubjectName(event.target.value)
-                    }
-                  />
+                    <textarea
+                      value={editLabDescription}
+                      onChange={(event) =>
+                        setEditLabDescription(event.target.value)
+                      }
+                    />
+                  </div>
 
-                  <button type="submit">
-                    хадгалах
-                  </button>
+                  <div className="span-2">
+                    <label>File-ыг солих</label>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingSubject(null)
-                      setEditSubjectName("")
-                    }}
-                  >
-                    Цуцлах
-                  </button>
+                    <input
+                      type="file"
+                      onChange={(event) =>
+                        setEditLabFile(
+                          event.target.files?.[0] || null
+                        )
+                      }
+                    />
+                  </div>
+
+                  <div className="span-2">
+                    <button type="submit">
+                      Хадгалах
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={cancelEditingLab}
+                    >
+                      Цуцлах
+                    </button>
+                  </div>
                 </form>
               ) : (
                 <>
-                  <strong>
-                    📚 {subject.name}
-                  </strong>
+                  <details className="fold">
+                    <summary>+ Лаб нэмэх</summary>
 
-                  <button
-                    onClick={() => {
-                      setEditingSubject(subject)
-                      setEditSubjectName(subject.name)
-                      setMessage("")
-                    }}
-                  >
-                    Шинэчлэх
-                  </button>
+                    <form className="form-grid" onSubmit={createLab}>
+                      <div>
+                        <label>Хичээл</label>
 
-                  <button
-                    onClick={() => deleteSubject(subject)}
-                  >
-                    Устгах
-                  </button>
+                        <select
+                          value={newLabSubjectId}
+                          onChange={(event) =>
+                            setNewLabSubjectId(event.target.value)
+                          }
+                        >
+                          <option value="">
+                            Хичээлийг сонгоно уу
+                          </option>
+
+                          {subjects.map((subject) => (
+                            <option
+                              key={subject.id}
+                              value={subject.id}
+                            >
+                              {subject.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label>Лабын нэр</label>
+
+                        <input
+                          type="text"
+                          placeholder="Lab 1 - Introduction"
+                          value={newLabTitle}
+                          onChange={(event) =>
+                            setNewLabTitle(event.target.value)
+                          }
+                        />
+                      </div>
+
+                      <div className="span-2">
+                        <label>Тайлбар</label>
+
+                        <textarea
+                          placeholder="Лабын тайлбар"
+                          value={newLabDescription}
+                          onChange={(event) =>
+                            setNewLabDescription(event.target.value)
+                          }
+                        />
+                      </div>
+
+                      <div className="span-2">
+                        <label>Лабын file</label>
+
+                        <input
+                          type="file"
+                          onChange={(event) =>
+                            setLabFile(
+                              event.target.files?.[0] || null
+                            )
+                          }
+                        />
+                      </div>
+
+                      <div className="span-2">
+                        <button type="submit">
+                          Лабыг нэмэх
+                        </button>
+                      </div>
+                    </form>
+                  </details>
+
+                  {adminLabs.length === 0 ? (
+                    <p>Лаб алга.</p>
+                  ) : (
+                    <ul className="admin-list">
+                      {adminLabs.map((lab) => (
+                        <li key={lab.id}>
+                          <span className="admin-list-main">
+                            {lab.title}
+
+                            {lab.description && (
+                              <small className="block">
+                                {lab.description}
+                              </small>
+                            )}
+
+                            <small className="block">
+                              {lab.filename
+                                ? `📎 ${lab.filename
+                                    .split("_")
+                                    .slice(1)
+                                    .join("_")}`
+                                : "file оруулаагүй"}
+                            </small>
+                          </span>
+
+                          <span className="row-actions">
+                            <button
+                              onClick={() => startEditingLab(lab)}
+                            >
+                              Шинэчлэх
+                            </button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </>
               )}
-
-              <hr />
             </div>
-          ))
+          </section>
         )}
 
-        {adminLabs.length > 0 && (
-          <>
-            <h2>Лабууд</h2>
-
-            {adminLabs.map((lab) => (
-              <div key={lab.id}>
-                <p>
-                  <strong>{lab.title}</strong>
-                </p>
-
-                <p>
-                  {lab.description}
-                </p>
-
-                <p>
-                  {lab.filename
-                    ? `📎 ${lab.filename
-                        .split("_")
-                        .slice(1)
-                        .join("_")}`
-                    : "file оруулаагүй"}
-                </p>
-
-                <button
-                  onClick={() =>
-                    startEditingLab(lab)
-                  }
-                >
-                  Шинэчлэх
-                </button>
-
-                <hr />
-              </div>
-            ))}
-          </>
+        {adminTab === "users" && (
+          <AdminUsers section="users" currentUserId={user.id} />
         )}
 
-        {editingLab && (
-          <>
-            <hr />
-
-            <h2>Лабыг шинэчлэх</h2>
-
-            <form onSubmit={updateLab}>
-              <div>
-                <label>Хичээл</label>
-                <br />
-
-                <select
-                  value={editLabSubjectId}
-                  onChange={(event) =>
-                    setEditLabSubjectId(
-                      event.target.value
-                    )
-                  }
-                >
-                  {subjects.map((subject) => (
-                    <option
-                      key={subject.id}
-                      value={subject.id}
-                    >
-                      {subject.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <br />
-
-              <div>
-                <label>Лабын нэр</label>
-                <br />
-
-                <input
-                  type="text"
-                  value={editLabTitle}
-                  onChange={(event) =>
-                    setEditLabTitle(
-                      event.target.value
-                    )
-                  }
-                />
-              </div>
-
-              <br />
-
-              <div>
-                <label>Тайлбар</label>
-                <br />
-
-                <textarea
-                  value={editLabDescription}
-                  onChange={(event) =>
-                    setEditLabDescription(
-                      event.target.value
-                    )
-                  }
-                />
-              </div>
-
-              <br />
-
-              <div>
-                <label>
-                  File-ыг солих
-                </label>
-                <br />
-
-                <input
-                  type="file"
-                  onChange={(event) =>
-                    setEditLabFile(
-                      event.target.files?.[0] || null
-                    )
-                  }
-                />
-              </div>
-
-              <br />
-
-              <button type="submit">
-                Хадгалах
-              </button>
-
-              {" "}
-
-              <button
-                type="button"
-                onClick={cancelEditingLab}
-              >
-                Цуцлах
-              </button>
-            </form>
-          </>
+        {adminTab === "emails" && (
+          <AdminUsers section="emails" currentUserId={user.id} />
         )}
 
         <p>{message}</p>
@@ -1001,17 +1022,20 @@ function App() {
   if (selectedLab) {
     return (
       <div>
-        <h1>Student Platform</h1>
+        <header className="topbar">
+          <h1>Student Platform</h1>
+        </header>
 
-        <button onClick={backToLabs}>
-          ← Лабууд руу буцах
-        </button>
+        <section className="subhead">
+          <button onClick={backToLabs}>
+            ← Лабууд руу буцах
+          </button>
+          <h2>{selectedLab.title}</h2>
+        </section>
 
-        <h2>{selectedLab.title}</h2>
-
-        <p>
-          {selectedLab.description}
-        </p>
+        {selectedLab.description && (
+          <p>{selectedLab.description}</p>
+        )}
 
         {selectedLab.filename ? (
           <>
@@ -1033,30 +1057,37 @@ function App() {
   if (selectedSubject) {
     return (
       <div>
-        <h1>Student Platform</h1>
+        <header className="topbar">
+          <h1>Student Platform</h1>
+        </header>
 
-        <button onClick={backToSubjects}>
-          ← Хичээл руу буцах
-        </button>
-
-        <h2>{selectedSubject.name}</h2>
+        <section className="subhead">
+          <button onClick={backToSubjects}>
+            ← Хичээл руу буцах
+          </button>
+          <h2>{selectedSubject.name}</h2>
+        </section>
 
         {labs.length === 0 ? (
           <p>Ямарч лаб байхгүй байна.</p>
         ) : (
-          labs.map((lab) => (
-            <div key={lab.id}>
-              <button onClick={() => openLab(lab)}>
-                {lab.title}
+          <section className="tile-grid">
+            {labs.map((lab) => (
+              <button
+                key={lab.id}
+                className="tile"
+                onClick={() => openLab(lab)}
+              >
+                <span className="tile-title">{lab.title}</span>
+                {lab.description && (
+                  <span className="tile-desc">{lab.description}</span>
+                )}
+                {lab.filename && (
+                  <span className="tile-badge">файлтай</span>
+                )}
               </button>
-
-              <p>
-                {lab.description}
-              </p>
-
-              <hr />
-            </div>
-          ))
+            ))}
+          </section>
         )}
       </div>
     )
@@ -1064,34 +1095,36 @@ function App() {
 
   return (
     <div>
-      <h1>Student Platform</h1>
+      <header className="topbar">
+        <h1>Student Platform</h1>
 
-      <p>
-        Тавтай морил, <strong>{user.username}</strong>!
-      </p>
+        <div className="topbar-right">
+          <span className="topbar-user">
+            Тавтай морил, <strong>{user.username}</strong>!
+          </span>
 
-      <button onClick={logout}>
-        Бүртгэлээс гарах
-      </button>
-
-      <hr />
+          <button onClick={logout}>
+            Бүртгэлээс гарах
+          </button>
+        </div>
+      </header>
 
       <h2>Хичээлүүд</h2>
 
       {subjects.length === 0 ? (
         <p>Ямарч хичээл алга.</p>
       ) : (
-        subjects.map((subject) => (
-          <div key={subject.id}>
+        <section className="tile-grid">
+          {subjects.map((subject) => (
             <button
-              onClick={() =>
-                openSubject(subject)
-              }
+              key={subject.id}
+              className="tile"
+              onClick={() => openSubject(subject)}
             >
-              {subject.name}
+              <span className="tile-title">{subject.name}</span>
             </button>
-          </div>
-        ))
+          ))}
+        </section>
       )}
     </div>
   )

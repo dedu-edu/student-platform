@@ -1,318 +1,251 @@
-* {
-    box-sizing: border-box;
-  }
-  
-  :root {
-    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    color: #1e293b;
-    background: #f4f7fb;
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-  }
-  
-  body {
-    margin: 0;
-    min-width: 320px;
-    min-height: 100vh;
-    background:
-      radial-gradient(circle at 10% 10%, rgba(99, 102, 241, 0.12), transparent 30%),
-      radial-gradient(circle at 90% 90%, rgba(139, 92, 246, 0.10), transparent 30%),
-      #f4f7fb;
-  }
-  
-  button,
-  input,
-  textarea,
-  select {
-    font: inherit;
-  }
-  
-  button {
-    border: none;
-    cursor: pointer;
-  }
-  
-  #root {
-    min-height: 100vh;
-    padding: 40px 20px;
-  }
-  
-  #root > div {
-    width: min(900px, 100%);
-    margin: 0 auto;
-    padding: 36px;
-    background: rgba(255, 255, 255, 0.88);
-    border: 1px solid rgba(255, 255, 255, 0.8);
-    border-radius: 24px;
-    box-shadow:
-      0 20px 60px rgba(15, 23, 42, 0.08),
-      0 2px 10px rgba(15, 23, 42, 0.04);
-    backdrop-filter: blur(18px);
-    animation: pageIn 0.5s ease;
-    position: relative;
-    overflow: hidden;
-  }
-  
-  #root > div::before {
-    content: "";
-    position: absolute;
-    width: 300px;
-    height: 300px;
-    top: -180px;
-    right: -120px;
-    background: radial-gradient(
-      circle,
-      rgba(99, 102, 241, 0.12),
-      transparent 70%
-    );
-    pointer-events: none;
-  }
-  
-  h1 {
-    position: relative;
-    margin: 0 0 8px;
-    font-size: 32px;
-    font-weight: 800;
-    letter-spacing: -1px;
-    background: linear-gradient(90deg, #4f46e5, #7c3aed);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  
-  h2 {
-    margin: 28px 0 16px;
-    font-size: 21px;
-    color: #334155;
-  }
-  
-  h3 {
-    margin: 12px 0;
-    color: #475569;
-  }
-  
-  p {
-    color: #64748b;
-    line-height: 1.6;
-  }
-  
-  hr {
-    border: none;
-    border-top: 1px solid #e2e8f0;
-    margin: 28px 0;
-  }
-  
-  form {
-    margin-top: 12px;
-  }
-  
-  label {
-    display: inline-block;
-    margin-bottom: 7px;
-    color: #475569;
-    font-size: 20px;
-    font-weight: 650;
-  }
-  
-  input,
-  textarea,
-  select {
-    width: 45%;
-    padding: 12px 14px;
-    color: #1e293b;
-    background: #f8fafc;
-    border: 1px solid #dbe3ee;
-    border-radius: 12px;
-    outline: none;
-    transition:
-      border-color 0.2s ease,
-      box-shadow 0.2s ease,
-      background 0.2s ease,
-      transform 0.2s ease;
-  }
-  
-  input:focus,
-  textarea:focus,
-  select:focus {
-    background: white;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
-  }
-  
-  textarea {
-    min-height: 110px;
-    resize: vertical;
-  }
-  
-  input[type="file"] {
-    padding: 10px;
-    cursor: pointer;
-  }
-  
-  input[type="file"]::file-selector-button {
-    margin-right: 10px;
-    padding: 8px 12px;
-    color: white;
-    background: #6366f1;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-  }
-  
-  button {
-    padding: 10px 17px;
-    margin: 4px 4px 4px 0;
-    color: white;
-    background: linear-gradient(135deg, #6366f1, #7c3aed);
-    border-radius: 10px;
-    font-weight: 650;
-    box-shadow: 0 5px 14px rgba(99, 102, 241, 0.22);
-    transition:
-      transform 0.2s ease,
-      box-shadow 0.2s ease,
-      filter 0.2s ease;
-  }
-  
-  button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
-    filter: brightness(1.04);
-  }
-  
-  button:active {
-    transform: translateY(0);
-  }
-  
-  button[type="button"] {
-    color: #475569;
-    background: #e2e8f0;
-    box-shadow: none;
-  }
-  
-  button[type="button"]:hover {
-    background: #cbd5e1;
-    box-shadow: none;
-  }
-  
-  form > div {
-    margin-bottom: 8px;
-  }
-  
-  #root > div > div {
-    margin-bottom: 14px;
-  }
-  
-  #root > div > div > p {
-    margin: 7px 0;
-  }
-  
-  #root > div > div:has(> button) {
-    transition: transform 0.2s ease;
-  }
-  
-  #root > div > div:has(> button):hover {
-    transform: translateX(2px);
-  }
-  
-  select {
-    cursor: pointer;
-  }
-  
-  @keyframes pageIn {
-    from {
-      opacity: 0;
-      transform: translateY(12px);
-    }
-  
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  @media (max-width: 650px) {
-    #root {
-      padding: 18px 12px;
-    }
-  
-    #root > div {
-      padding: 24px 20px;
-      border-radius: 18px;
-    }
-  
-    h1 {
-      font-size: 27px;
-    }
-  
-    h2 {
-      font-size: 19px;
-    }
-  }
+/* ===== Wired theme (Serial Experiments Lain style) =====
+   Drop-in replacement for src/App.css. No changes to App.tsx needed. */
 
-  .auth-page {
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
-  }
-  
-  .auth-card {
-    width: 100%;
-    max-width: 420px;
-    padding: 32px;
-    border-radius: 16px;
-    background: white;
-    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.08);
-  }
-  
-  .auth-card h1 {
-    margin-bottom: 8px;
-  }
-  
-  .auth-card > p {
-    margin-bottom: 24px;
-    color: #777;
-  }
-  
-  .auth-card form {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  
-  .auth-card input {
-    padding: 12px 14px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    font-size: 15px;
-  }
-  
-  .auth-card form button {
-    padding: 12px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 15px;
-  }
-  
-  .auth-error {
-    padding: 10px;
-    border-radius: 8px;
-    background: #ffe8e8;
-    color: #c62828;
-  }
-  
-  .auth-switch {
-    margin-top: 20px;
-    text-align: center;
-    color: #777;
-  }
-  
-  .text-button {
-    background: none !important;
-    border: none !important;
-    padding: 0 !important;
-    color: #2563eb;
-    cursor: pointer;
-    font-size: inherit;
-  }
+   * { box-sizing: border-box; }
+
+   :root {
+     --w-bg: #06080b;
+     --w-panel: #0b1014;
+     --w-panel-2: #0f171b;
+     --w-line: #2a3a3a;
+     --w-ink: #b9cfc8;
+     --w-dim: #7d9a94;
+     --w-teal: #8fd1c0;
+     --w-red: #d0453f;
+   
+     font-family: "Courier New", ui-monospace, "MS Gothic", "Osaka-Mono", monospace;
+     color: var(--w-ink);
+     background: var(--w-bg);
+     font-synthesis: none;
+     text-rendering: optimizeLegibility;
+   }
+   
+   body {
+     margin: 0;
+     min-width: 320px;
+     min-height: 100vh;
+     background: var(--w-bg);
+     letter-spacing: 0.02em;
+   }
+   
+   /* CRT scanlines + vignette */
+   body::before {
+     content: "";
+     position: fixed;
+     inset: 0;
+     pointer-events: none;
+     z-index: 9;
+     background: repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px);
+   }
+   body::after {
+     content: "";
+     position: fixed;
+     inset: 0;
+     pointer-events: none;
+     z-index: 8;
+     background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.75));
+   }
+   
+   button, input, textarea, select { font: inherit; }
+   button { border: none; cursor: pointer; }
+   
+   #root {
+     min-height: 100vh;
+     padding: 40px 20px;
+   }
+   
+   /* Main window */
+   #root > div {
+     width: min(900px, 100%);
+     margin: 0 auto;
+     padding: 36px;
+     background: var(--w-panel);
+     border: 1px solid var(--w-line);
+     position: relative;
+     overflow: hidden;
+     animation: pageIn 0.4s ease;
+   }
+   
+   h1 {
+     margin: 0 0 8px;
+     font-size: 28px;
+     font-weight: 400;
+     letter-spacing: 0.04em;
+     color: var(--w-teal);
+   }
+   /* one-time glitch when a page loads */
+   #root > div > h1 { animation: glitch 0.5s steps(2) 1; }
+   
+   h2 {
+     margin: 28px 0 16px;
+     padding-bottom: 6px;
+     font-size: 20px;
+     font-weight: 400;
+     color: var(--w-teal);
+     border-bottom: 1px solid var(--w-line);
+   }
+   h3 { margin: 12px 0; font-weight: 400; color: var(--w-ink); }
+   p  { color: var(--w-dim); line-height: 1.6; }
+   hr { border: none; border-top: 1px solid var(--w-line); margin: 28px 0; }
+   form { margin-top: 12px; }
+   
+   label {
+     display: inline-block;
+     margin-bottom: 7px;
+     color: var(--w-dim);
+     font-size: 15px;
+     font-weight: 400;
+   }
+   
+   input, textarea, select {
+     width: 45%;
+     padding: 10px 12px;
+     color: var(--w-teal);
+     background: #000;
+     border: 1px solid var(--w-line);
+     border-radius: 0;
+     outline: none;
+     transition: border-color .2s ease;
+   }
+   input:focus, textarea:focus, select:focus {
+     border-color: var(--w-teal);
+   }
+   textarea { min-height: 110px; resize: vertical; }
+   select { cursor: pointer; }
+   
+   input[type="file"] { padding: 8px; cursor: pointer; }
+   input[type="file"]::file-selector-button {
+     margin-right: 10px;
+     padding: 6px 12px;
+     color: var(--w-teal);
+     background: transparent;
+     border: 1px solid var(--w-teal);
+     border-radius: 0;
+     cursor: pointer;
+   }
+   
+   button {
+     padding: 9px 18px;
+     margin: 4px 4px 4px 0;
+     color: var(--w-teal);
+     background: transparent;
+     border: 1px solid var(--w-teal);
+     border-radius: 0;
+     transition: background .15s ease, color .15s ease;
+   }
+   button:hover { background: var(--w-teal); color: #000; }
+   button:focus-visible,
+   input:focus-visible,
+   select:focus-visible,
+   textarea:focus-visible { outline: 1px solid var(--w-teal); outline-offset: 2px; }
+   
+   /* secondary buttons: dimmer border */
+   button[type="button"] { color: var(--w-ink); border-color: var(--w-line); }
+   button[type="button"]:hover { background: var(--w-panel-2); color: var(--w-teal); border-color: var(--w-teal); }
+   
+   form > div { margin-bottom: 8px; }
+   #root > div > div { margin-bottom: 14px; }
+   #root > div > div > p { margin: 7px 0; }
+   #root > div > div:has(> button) { transition: transform .2s ease; }
+   #root > div > div:has(> button):hover { transform: translateX(2px); }
+   
+   /* ----- Login screen: signal graphic above the title ----- */
+   #root > div:has(> h1 + form) { max-width: 460px; text-align: center; }
+   #root > div:has(> h1 + form) label,
+   #root > div:has(> h1 + form) form > div { text-align: left; }
+   #root > div:has(> h1 + form) input { width: 100%; }
+   h1:has(+ form)::before {
+     content: "";
+     display: block;
+     width: 132px;
+     height: 132px;
+     margin: 0 auto 18px;
+     border-radius: 50%;
+     border: 1px dashed var(--w-teal);
+     background:
+       radial-gradient(circle, var(--w-teal) 0 6px, transparent 7px),
+       repeating-radial-gradient(circle, transparent 0 16px, rgba(143,209,192,.5) 16px 17px);
+     animation: spin 40s linear infinite;
+   }
+   
+   /* ----- Auth card (register page) ----- */
+   .auth-page {
+     min-height: 100vh;
+     display: flex;
+     justify-content: center;
+     align-items: center;
+     padding: 20px;
+   }
+   .auth-card {
+     width: 100%;
+     max-width: 420px;
+     padding: 32px;
+     background: var(--w-panel);
+     border: 1px solid var(--w-line);
+   }
+   .auth-card h1 { margin-bottom: 8px; }
+   .auth-card > p { margin-bottom: 24px; color: var(--w-dim); }
+   .auth-card form { display: flex; flex-direction: column; gap: 14px; }
+   .auth-card input { width: 100%; padding: 10px 12px; font-size: 15px; }
+   .auth-card form button { padding: 11px; font-size: 15px; }
+   .auth-error {
+     padding: 10px;
+     color: var(--w-red);
+     background: transparent;
+     border: 1px solid var(--w-red);
+   }
+   .auth-switch { margin-top: 20px; text-align: center; color: var(--w-dim); }
+   .text-button {
+     background: none !important;
+     border: none !important;
+     padding: 0 !important;
+     color: var(--w-teal) !important;
+     cursor: pointer;
+     font-size: inherit;
+     text-decoration: underline;
+   }
+   
+   /* ----- Motion ----- */
+   @keyframes pageIn { from { opacity: 0; } to { opacity: 1; } }
+   @keyframes spin   { to { transform: rotate(360deg); } }
+   @keyframes glitch {
+     0%   { transform: translate(0); }
+     20%  { transform: translate(-4px, 1px); text-shadow: 3px 0 var(--w-red), -3px 0 var(--w-teal); }
+     40%  { transform: translate(3px, -1px); }
+     60%  { transform: translate(-2px, 0);   text-shadow: -3px 0 var(--w-red); }
+     100% { transform: none; }
+   }
+   
+   @media (max-width: 650px) {
+     #root { padding: 18px 12px; }
+     #root > div { padding: 24px 18px; }
+     h1 { font-size: 24px; }
+     h2 { font-size: 18px; }
+     input, textarea, select { width: 100%; }
+   }
+   
+   @media (prefers-reduced-motion: reduce) {
+     *, *::before, *::after { animation: none !important; transition: none !important; }
+   }
+   
+   /* ----- Passive animated background (public/wired-bg.svg) ----- */
+   #root::before {
+     content: "";
+     position: fixed;
+     inset: 0;
+     z-index: 0;
+     pointer-events: none;
+     background: url("/wired-bg.svg") center / cover no-repeat;
+     opacity: .55;
+   }
+   #root > div { z-index: 1; background: rgba(11, 16, 20, .9); }
+   
+   /* ----- Matrix rain canvas (src/MatrixRain.tsx) ----- */
+   .matrix-rain {
+     position: fixed;
+     inset: 0;
+     z-index: 0;
+     width: 100%;
+     height: 100%;
+     pointer-events: none;
+   }

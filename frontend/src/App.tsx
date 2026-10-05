@@ -695,8 +695,8 @@ function App() {
   
     return (
       <div>
-        <h1>The Eden</h1>
-  
+        <h1>The Edenlock</h1>
+        <h4>Take What’s Hidden From You.</h4>  
         <form onSubmit={handleLogin}>
           <div>
             <label>Бүртгүүлсэн нэр</label>
@@ -734,7 +734,7 @@ function App() {
         </form>
   
         <p>{message}</p>
-  
+        <h6>Unlock,Understand,Use</h6>
         <hr />
   
         <button
@@ -1116,7 +1116,7 @@ function App() {
     return (
       <div>
         <header className="topbar">
-          <h1>The Eden</h1>
+          <h1>The Edenlock</h1>
         </header>
 
         <section className="subhead">
@@ -1151,7 +1151,7 @@ function App() {
     return (
       <div>
         <header className="topbar">
-          <h1>The Eden</h1>
+          <h1>The Edenlock</h1>
         </header>
 
         <section className="subhead">
@@ -1189,7 +1189,7 @@ function App() {
   return (
     <div>
       <header className="topbar">
-        <h1>The Eden</h1>
+        <h1>The Edenlock</h1>
 
         <div className="topbar-right">
           <span className="topbar-user">

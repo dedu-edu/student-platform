@@ -65,12 +65,6 @@ supabase: Client = create_client(
 def root():
     return {"message": "Student Platform API is running"}
 
-
-@app.get("/users")
-def get_users(db: Session = Depends(get_db)):
-    return db.query(User).all()
-
-
 @app.post("/register", response_model=UserResponse)
 def register(
     user: UserCreate,
@@ -608,3 +602,78 @@ def make_user_admin(
         "username": user.username,
         "email": user.email
     }
+
+@app.delete("/admin/labs/{lab_id}")
+def delete_lab(
+    lab_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    lab = db.query(models.Lab).filter(models.Lab.id == lab_id).first()
+ 
+    if not lab:
+        raise HTTPException(status_code=404, detail="Lab not found")
+ 
+    stored_filename = lab.filename
+ 
+    db.delete(lab)
+    db.commit()
+ 
+    # Best effort: the lab is already gone from the database, so a storage
+    # hiccup only leaves an orphaned file and must not fail the request.
+    if stored_filename:
+        try:
+            supabase.storage.from_(SUPABASE_BUCKET).remove([stored_filename])
+        except Exception:
+            pass
+ 
+    return {"message": "Lab deleted successfully"}
+
+@app.get("/users", response_model=list[UserResponse])
+def get_users(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    return db.query(User).all()
+
+
+@app.put("/admin/users/{user_id}/remove-admin")
+def remove_user_admin(
+    user_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.id == current_admin.id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot remove your own admin access"
+        )
+
+    user.is_admin = False
+    db.commit()
+
+    return {"message": "Admin access removed", "username": user.username}
+
+
+@app.delete("/admin/allowed-emails/{email_id}")
+def delete_allowed_email(
+    email_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    item = db.query(models.AllowedEmail).filter(
+        models.AllowedEmail.id == email_id
+    ).first()
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    db.delete(item)
+    db.commit()
+
+    return {"message": "Email removed from allowlist"}

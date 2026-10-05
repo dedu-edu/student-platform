@@ -405,3 +405,5 @@
      .form-grid { grid-template-columns: 1fr; }
      .win-body { max-height: none; }
    }
+   
+   .inline-form select { flex: 1 1 200px; width: auto; }

@@ -49,7 +49,7 @@ export default function Register({
     <div className="auth-page">
       <div className="auth-card">
         <h1>Бүртгэл үүсгэх</h1>
-        <p>Join the Student Platform</p>
+        <p>Join The Eden</p>
 
         <form onSubmit={handleSubmit}>
           <input

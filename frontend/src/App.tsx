@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import "./App.css"
 import Register from "./Register";
 import AdminUsers from "./AdminUsers";
@@ -60,8 +60,18 @@ function App() {
   const [editLabFile, setEditLabFile] = useState<File | null>(null)
   const [showRegister, setShowRegister] = useState(false);
   const [adminTab, setAdminTab] = useState<AdminTab>("subjects")
+  const [labFilter, setLabFilter] = useState("")
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null)
   const [editSubjectName, setEditSubjectName] = useState("")
+
+  // The Labs tab needs every lab from every subject, so load them when it opens
+  // (and again whenever the subjects list is refreshed after an add/edit).
+  useEffect(() => {
+    if (user?.is_admin && adminTab === "labs") {
+      void loadAllAdminLabs(subjects)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, adminTab, subjects])
 
   const handleRegister = async (
     username: string,
@@ -488,30 +498,37 @@ function App() {
     setMessage("File байрлуулж чадлаа!")
   }
 
-  async function loadAdminLabsForSubject(subjectId: number) {
+  async function loadAllAdminLabs(subjectList: Subject[]) {
     const token = localStorage.getItem("token")
 
     if (!token) {
       return
     }
 
-    const response = await fetch(
-      `${API_URL}/subjects/${subjectId}/labs`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
-    )
+    try {
+      const results = await Promise.all(
+        subjectList.map(async (subject) => {
+          const response = await fetch(
+            `${API_URL}/subjects/${subject.id}/labs`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            }
+          )
 
-    const data = await response.json()
+          if (!response.ok) {
+            return [] as Lab[]
+          }
 
-    if (!response.ok) {
-      setMessage(data.detail || "Лабуудыг загсааж чадсангүй")
-      return
+          return (await response.json()) as Lab[]
+        })
+      )
+
+      setAdminLabs(results.flat())
+    } catch {
+      setMessage("Лабуудыг ачаалж чадсангүй")
     }
-
-    setAdminLabs(data)
   }
 
   function startEditingLab(lab: Lab) {
@@ -521,6 +538,52 @@ function App() {
     setEditLabSubjectId(String(lab.subject_id))
     setEditLabFile(null)
     setMessage("")
+  }
+
+  async function deleteLab(lab: Lab) {
+    const token = localStorage.getItem("token")
+
+    if (!token) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Устгах "${lab.title}"?\n\nЭнэ лаб болон түүний file-ыг устгах болно. Итгэлтэй байна уу?`
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/admin/labs/${lab.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      )
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+
+        setMessage(
+          response.status === 404 || response.status === 405
+            ? "Backend дээр лаб устгах route алга. Backend-ээ шинэчилнэ үү."
+            : data?.detail || "Лабыг устгаж чадсангүй."
+        )
+        return
+      }
+
+      setMessage("Лаб амжилттай устгагдлаа!")
+
+      // refreshing subjects also refreshes the Labs tab list
+      await loadSubjects(token)
+    } catch {
+      setMessage("Лабыг устгаж чадсангүй.")
+    }
   }
 
   function cancelEditingLab() {
@@ -596,12 +659,6 @@ function App() {
     setEditLabFile(null)
 
     await loadSubjects(token)
-
-    if (editingLab.subject_id) {
-      await loadAdminLabsForSubject(
-        Number(editLabSubjectId)
-      )
-    }
   }
 
   function backToSubjects() {
@@ -638,7 +695,7 @@ function App() {
   
     return (
       <div>
-        <h1>Оюутны platform</h1>
+        <h1>The Eden</h1>
   
         <form onSubmit={handleLogin}>
           <div>
@@ -691,6 +748,10 @@ function App() {
   }
 
   if (user.is_admin) {
+    const visibleLabs = labFilter
+      ? adminLabs.filter((lab) => String(lab.subject_id) === labFilter)
+      : adminLabs
+
     return (
       <div>
         <header className="topbar">
@@ -964,14 +1025,42 @@ function App() {
                     </form>
                   </details>
 
-                  {adminLabs.length === 0 ? (
+                  <div className="inline-form">
+                    <select
+                      aria-label="Хичээлээр шүүх"
+                      value={labFilter}
+                      onChange={(event) =>
+                        setLabFilter(event.target.value)
+                      }
+                    >
+                      <option value="">Бүх хичээл</option>
+
+                      {subjects.map((subject) => (
+                        <option
+                          key={subject.id}
+                          value={subject.id}
+                        >
+                          {subject.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {visibleLabs.length === 0 ? (
                     <p>Лаб алга.</p>
                   ) : (
                     <ul className="admin-list">
-                      {adminLabs.map((lab) => (
+                      {visibleLabs.map((lab) => (
                         <li key={lab.id}>
                           <span className="admin-list-main">
                             {lab.title}
+
+                            <span className="badge">
+                              {subjects.find(
+                                (subject) =>
+                                  subject.id === lab.subject_id
+                              )?.name ?? "—"}
+                            </span>
 
                             {lab.description && (
                               <small className="block">
@@ -994,6 +1083,10 @@ function App() {
                               onClick={() => startEditingLab(lab)}
                             >
                               Шинэчлэх
+                            </button>
+
+                            <button onClick={() => deleteLab(lab)}>
+                              Устгах
                             </button>
                           </span>
                         </li>
@@ -1023,7 +1116,7 @@ function App() {
     return (
       <div>
         <header className="topbar">
-          <h1>Student Platform</h1>
+          <h1>The Eden</h1>
         </header>
 
         <section className="subhead">
@@ -1058,7 +1151,7 @@ function App() {
     return (
       <div>
         <header className="topbar">
-          <h1>Student Platform</h1>
+          <h1>The Eden</h1>
         </header>
 
         <section className="subhead">
@@ -1096,7 +1189,7 @@ function App() {
   return (
     <div>
       <header className="topbar">
-        <h1>Student Platform</h1>
+        <h1>The Eden</h1>
 
         <div className="topbar-right">
           <span className="topbar-user">

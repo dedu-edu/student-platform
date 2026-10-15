@@ -34,8 +34,10 @@ type AllowedEmail = {
 type Props = {
   currentUserId: number;
   section: "users" | "emails";
-  // only for the platform admin: which school to show
+  // only for the platform admin: which school to show, and all schools
+  // so a user can be moved to another one
   schoolId: number | null;
+  schools: { id: number; name: string }[];
 };
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -64,6 +66,7 @@ export default function AdminUsers({
   currentUserId,
   section,
   schoolId,
+  schools,
 }: Props) {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [emails, setEmails] = useState<AllowedEmail[]>([]);
@@ -127,6 +130,26 @@ export default function AdminUsers({
     }
   }
 
+  async function moveSchool(user: UserRow, newSchoolId: number) {
+    const school = schools.find((s) => s.id === newSchoolId);
+    if (
+      !school ||
+      !window.confirm(`${user.username}-ийг "${school.name}" сургууль руу шилжүүлэх үү?`)
+    ) {
+      return;
+    }
+    try {
+      await api(`/platform/users/${user.id}/school`, {
+        method: "PUT",
+        body: JSON.stringify({ school_id: newSchoolId }),
+      });
+      report(`${user.username} → ${school.name}`);
+      await loadAll();
+    } catch (err) {
+      report(err instanceof Error ? err.message : "Алдаа гарлаа", true);
+    }
+  }
+
   async function addEmail(event: FormEvent) {
     event.preventDefault();
     const email = newEmail.trim().toLowerCase();
@@ -176,6 +199,21 @@ export default function AdminUsers({
                     <small>{u.email}</small>
                   </span>
                   <span className="row-actions">
+                    {schools.length > 1 && schoolId && (
+                      <select
+                        aria-label={`${u.username}-ийн сургууль`}
+                        value={schoolId}
+                        onChange={(event) =>
+                          moveSchool(u, Number(event.target.value))
+                        }
+                      >
+                        {schools.map((school) => (
+                          <option key={school.id} value={school.id}>
+                            {school.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     {u.role === "platform_admin" || u.id === currentUserId ? (
                       <span className="badge">{ROLE_LABELS[u.role]}</span>
                     ) : (

@@ -22,6 +22,7 @@ from schemas import (
     UserCreate,
     UserResponse,
     RoleUpdate,
+    SchoolUpdate,
     SchoolCreate,
     SchoolResponse,
     TeacherCreate,
@@ -318,6 +319,29 @@ def set_user_role(
     db: Session = Depends(get_db)
 ):
     return change_user_role(db, current_admin, user_id, data.role)
+
+
+@app.put("/platform/users/{user_id}/school", response_model=UserResponse)
+def move_user_to_school(
+    user_id: int,
+    data: SchoolUpdate,
+    current_admin: User = Depends(get_current_platform_admin),
+    db: Session = Depends(get_db)
+):
+    target = get_school_user(db, current_admin, user_id)
+    require_school(db, data.school_id)
+
+    target.school_id = data.school_id
+
+    # keep the allowlist entry in step, so it matches where the person is
+    db.query(models.AllowedEmail).filter(
+        models.AllowedEmail.email == target.email
+    ).update({"school_id": data.school_id}, synchronize_session=False)
+
+    db.commit()
+    db.refresh(target)
+
+    return target
 
 
 # legacy endpoints, kept so the current frontend keeps working

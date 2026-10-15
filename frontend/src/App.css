@@ -414,3 +414,4 @@
 .inline-form select { flex: 0 1 auto; width: auto; }
 .row-actions select { width: auto; margin: 0; padding: 6px 8px; font-size: 14px; }
 .topbar-right select { width: auto; margin: 0; }
+.row-actions select + select, .row-actions select + .badge { margin-left: 6px; }

@@ -24,6 +24,10 @@ class RoleUpdate(BaseModel):
     role: str
 
 
+class SchoolUpdate(BaseModel):
+    school_id: int
+
+
 class SchoolCreate(BaseModel):
     name: str
 

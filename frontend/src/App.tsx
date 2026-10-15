@@ -1659,6 +1659,7 @@ function App() {
             section={adminTab}
             currentUserId={user.id}
             schoolId={user.role === "platform_admin" ? schoolId : null}
+            schools={user.role === "platform_admin" ? schools : []}
           />
         )}
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import "./App.css"
 import Register from "./Register";
 import AdminUsers from "./AdminUsers";
+import ActivityLog from "./ActivityLog";
 const API_URL = import.meta.env.VITE_API_URL;
 
 type Role = "student" | "school_admin" | "platform_admin"
@@ -16,7 +17,7 @@ type User = {
   is_admin: boolean
 }
 
-type AdminTab = "schools" | "teachers" | "subjects" | "labs" | "users" | "emails"
+type AdminTab = "schools" | "teachers" | "subjects" | "labs" | "users" | "emails" | "log"
 
 const ADMIN_TABS: { id: AdminTab; label: string }[] = [
   { id: "schools", label: "Сургуулиуд" },
@@ -25,12 +26,13 @@ const ADMIN_TABS: { id: AdminTab; label: string }[] = [
   { id: "labs", label: "Лабууд" },
   { id: "users", label: "Хэрэглэгчид" },
   { id: "emails", label: "И-мэйлүүд" },
+  { id: "log", label: "Лог" },
 ]
 
 // which tabs each admin role gets; students never see the dashboard
 function tabsFor(role: Role): AdminTab[] {
-  if (role === "platform_admin") return ["schools", "teachers", "subjects", "labs", "users", "emails"]
-  if (role === "school_admin") return ["teachers", "subjects", "labs", "users", "emails"]
+  if (role === "platform_admin") return ["schools", "teachers", "subjects", "labs", "users", "emails", "log"]
+  if (role === "school_admin") return ["teachers", "subjects", "labs", "users", "emails", "log"]
   return []
 }
 
@@ -980,6 +982,16 @@ function App() {
   }
 
   function logout() {
+    const token = localStorage.getItem("token")
+
+    // record the logout in the activity log; never block logging out on it
+    if (token) {
+      void fetch(`${API_URL}/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {})
+    }
+
     localStorage.removeItem("token")
 
     setUser(null)
@@ -1660,6 +1672,12 @@ function App() {
             currentUserId={user.id}
             schoolId={user.role === "platform_admin" ? schoolId : null}
             schools={user.role === "platform_admin" ? schools : []}
+          />
+        )}
+
+        {adminTab === "log" && (
+          <ActivityLog
+            schoolId={user.role === "platform_admin" ? schoolId : null}
           />
         )}
 

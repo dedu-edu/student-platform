@@ -1,8 +1,16 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint, Table
+from datetime import datetime, timezone
+
+from sqlalchemy import (
+    Column, Integer, String, ForeignKey, UniqueConstraint, Table, DateTime
+)
 from sqlalchemy.orm import relationship
 
 from database import Base
 from roles import ADMIN_ROLES, ROLE_STUDENT
+
+
+def utcnow():
+    return datetime.now(timezone.utc)
 
 
 class School(Base):
@@ -33,6 +41,9 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     role = Column(String, nullable=False, default=ROLE_STUDENT)
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=True)
+    # empty for accounts made before the activity log existed
+    created_at = Column(DateTime(timezone=True), nullable=True, default=utcnow)
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
 
     school = relationship("School")
 
@@ -112,3 +123,27 @@ class Lab(Base):
     @property
     def teacher_name(self):
         return self.teacher.name if self.teacher else None
+
+class ActivityLog(Base):
+    """Who did what, when, from which device. Read by admins in the Log tab."""
+    __tablename__ = "activity_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False,
+        index=True
+    )
+    # copied from the user so each school's log stays separate even if
+    # the person later moves to another school
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=True, index=True)
+    event = Column(String, nullable=False)  # register, login, logout, download
+    detail = Column(String, nullable=True)  # e.g. the downloaded file
+    device = Column(String, nullable=True)  # e.g. "Chrome · Windows · Desktop"
+    user_agent = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+
+    user = relationship("User")
+
+    @property
+    def username(self):
+        return self.user.username if self.user else None

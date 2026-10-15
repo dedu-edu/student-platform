@@ -415,3 +415,14 @@
 .row-actions select { width: auto; margin: 0; padding: 6px 8px; font-size: 14px; }
 .topbar-right select { width: auto; margin: 0; }
 .row-actions select + select, .row-actions select + .badge { margin-left: 6px; }
+
+/* ----- Log tab ----- */
+.log-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; }
+.log-head h3 { margin: 0; }
+.log-head button { margin: 0; padding: 6px 12px; font-size: 14px; }
+.log-scroll { overflow-x: auto; margin: 0 0 16px; }
+.log-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.log-table th, .log-table td { padding: 6px 8px; text-align: left; border-bottom: 1px dashed var(--w-line); white-space: nowrap; }
+.log-table th { color: var(--w-teal); font-weight: 400; }
+.log-table td { color: var(--w-ink); }
+.log-table small.block { display: block; color: var(--w-dim); }

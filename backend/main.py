@@ -2,10 +2,11 @@ import os
 import uuid
 from urllib.parse import quote
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from supabase import create_client, Client
 
@@ -34,7 +35,16 @@ from schemas import (
     SubjectUpdate,
     SubjectResponse,
     LabCreate,
-    LabResponse
+    LabResponse,
+    ActivityResponse,
+    UserActivitySummary
+)
+from activity import (
+    log_event,
+    EVENT_REGISTER,
+    EVENT_LOGIN,
+    EVENT_LOGOUT,
+    EVENT_DOWNLOAD
 )
 from auth import (
     hash_password,
@@ -113,6 +123,7 @@ def root():
 @app.post("/register", response_model=UserResponse)
 def register(
     user: UserCreate,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     email = user.email.lower().strip()
@@ -148,6 +159,8 @@ def register(
     )
 
     db.add(new_user)
+    db.flush()
+    log_event(db, new_user, EVENT_REGISTER, request)
     db.commit()
     db.refresh(new_user)
 
@@ -156,6 +169,7 @@ def register(
 
 @app.post("/login", response_model=Token)
 def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
@@ -176,10 +190,26 @@ def login(
         data={"sub": user.username}
     )
 
+    log_event(db, user, EVENT_LOGIN, request)
+    db.commit()
+
     return {
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+
+@app.post("/logout")
+def logout(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # the token itself just expires; this only records the logout
+    log_event(db, current_user, EVENT_LOGOUT, request)
+    db.commit()
+
+    return {"message": "Logged out"}
 
 
 @app.get("/me", response_model=UserResponse)
@@ -951,6 +981,7 @@ async def update_lab_file(
 @app.get("/labs/{lab_id}/download")
 def download_lab_file(
     lab_id: int,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -983,6 +1014,12 @@ def download_lab_file(
     else:
         original_filename = lab.filename
 
+    log_event(
+        db, current_user, EVENT_DOWNLOAD, request,
+        detail=f"{lab.title}: {original_filename}"
+    )
+    db.commit()
+
     # headers must be latin-1, so non-Latin names (e.g. Cyrillic) go in
     # filename* (RFC 6266) with a plain ASCII fallback in filename
     ascii_filename = (
@@ -1000,3 +1037,98 @@ def download_lab_file(
             )
         }
     )
+
+
+# ---------------------------------------------------------- activity log
+
+def activity_school_filter(query, column, current_admin: User, school_id):
+    """School admins see their own school; the platform admin picks one."""
+    if current_admin.role == ROLE_PLATFORM_ADMIN:
+        return query.filter(column == school_id) if school_id else query
+
+    return query.filter(column == current_admin.school_id)
+
+
+@app.get("/admin/activity", response_model=list[ActivityResponse])
+def get_activity(
+    school_id: int | None = None,
+    user_id: int | None = None,
+    event: str | None = None,
+    limit: int = 500,
+    current_admin: User = Depends(get_current_school_admin),
+    db: Session = Depends(get_db)
+):
+    query = activity_school_filter(
+        db.query(models.ActivityLog),
+        models.ActivityLog.school_id,
+        current_admin,
+        school_id
+    )
+
+    if user_id:
+        query = query.filter(models.ActivityLog.user_id == user_id)
+
+    if event:
+        query = query.filter(models.ActivityLog.event == event)
+
+    return query.order_by(
+        models.ActivityLog.created_at.desc(),
+        models.ActivityLog.id.desc()
+    ).limit(min(max(limit, 1), 5000)).all()
+
+
+@app.get("/admin/activity/users", response_model=list[UserActivitySummary])
+def get_activity_users(
+    school_id: int | None = None,
+    current_admin: User = Depends(get_current_school_admin),
+    db: Session = Depends(get_db)
+):
+    users = activity_school_filter(
+        db.query(User), User.school_id, current_admin, school_id
+    ).order_by(User.username).all()
+
+    ids = [user.id for user in users]
+    log = models.ActivityLog
+
+    def latest(event):
+        return dict(
+            db.query(log.user_id, func.max(log.created_at))
+            .filter(log.user_id.in_(ids), log.event == event)
+            .group_by(log.user_id)
+            .all()
+        )
+
+    last_login = latest(EVENT_LOGIN)
+    last_logout = latest(EVENT_LOGOUT)
+    downloads = dict(
+        db.query(log.user_id, func.count(log.id))
+        .filter(log.user_id.in_(ids), log.event == EVENT_DOWNLOAD)
+        .group_by(log.user_id)
+        .all()
+    )
+
+    # device of each user's most recent event
+    newest_ids = (
+        db.query(func.max(log.id))
+        .filter(log.user_id.in_(ids), log.device.isnot(None))
+        .group_by(log.user_id)
+    )
+    last_device = dict(
+        db.query(log.user_id, log.device).filter(log.id.in_(newest_ids)).all()
+    )
+
+    return [
+        UserActivitySummary(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            role=user.role,
+            created_at=user.created_at,
+            last_login_at=last_login.get(user.id),
+            last_logout_at=last_logout.get(user.id),
+            last_seen_at=user.last_seen_at,
+            last_device=last_device.get(user.id),
+            downloads=downloads.get(user.id, 0),
+        )
+        for user in users
+    ]

@@ -9,6 +9,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
+from activity import touch_last_seen
 from database import get_db
 from models import User
 from roles import (
@@ -97,6 +98,10 @@ def get_current_user(
 
     if user is None:
         raise credentials_exception
+
+    # "last active" in the log; the closest thing to a disconnect time when
+    # someone just closes the tab instead of logging out
+    touch_last_seen(db, user)
 
     return user
 

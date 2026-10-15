@@ -3,21 +3,39 @@ import type { FormEvent } from "react";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+type Role = "student" | "school_admin" | "platform_admin";
+
+// platform_admin can only be set in the database, so it is not offered here.
+// teachers do not log in: they are added in the "Багш нар" tab instead.
+const ROLE_OPTIONS: { id: Role; label: string }[] = [
+  { id: "student", label: "Сурагч" },
+  { id: "school_admin", label: "Сургуулийн админ" },
+];
+
+const ROLE_LABELS: Record<Role, string> = {
+  student: "Сурагч",
+  school_admin: "Сургуулийн админ",
+  platform_admin: "Платформын админ",
+};
+
 type UserRow = {
   id: number;
   username: string;
   email: string;
-  is_admin: boolean;
+  role: Role;
 };
 
 type AllowedEmail = {
   id: number;
   email: string;
+  role: Role;
 };
 
 type Props = {
   currentUserId: number;
   section: "users" | "emails";
+  // only for the platform admin: which school to show
+  schoolId: number | null;
 };
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -42,10 +60,15 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export default function AdminUsers({ currentUserId, section }: Props) {
+export default function AdminUsers({
+  currentUserId,
+  section,
+  schoolId,
+}: Props) {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [emails, setEmails] = useState<AllowedEmail[]>([]);
   const [newEmail, setNewEmail] = useState("");
+  const [newEmailRole, setNewEmailRole] = useState<Role>("student");
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
   const [isError, setIsError] = useState(false);
@@ -56,10 +79,11 @@ export default function AdminUsers({ currentUserId, section }: Props) {
   };
 
   const loadAll = useCallback(async () => {
+    const query = schoolId ? `?school_id=${schoolId}` : "";
     try {
       const [userData, emailData] = await Promise.all([
-        api<UserRow[]>("/users"),
-        api<AllowedEmail[]>("/admin/allowed-emails"),
+        api<UserRow[]>(`/users${query}`),
+        api<AllowedEmail[]>(`/admin/allowed-emails${query}`),
       ]);
       // keep only the fields we show; never hold password hashes in state
       setUsers(
@@ -67,36 +91,36 @@ export default function AdminUsers({ currentUserId, section }: Props) {
           id: u.id,
           username: u.username,
           email: u.email,
-          is_admin: u.is_admin,
+          role: u.role,
         })),
       );
-      setEmails(emailData.map((e) => ({ id: e.id, email: e.email })));
+      setEmails(
+        emailData.map((e) => ({ id: e.id, email: e.email, role: e.role })),
+      );
     } catch (err) {
       report(err instanceof Error ? err.message : "Алдаа гарлаа", true);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [schoolId]);
 
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
 
-  async function makeAdmin(user: UserRow) {
-    try {
-      await api(`/admin/users/${user.id}/make-admin`, { method: "PUT" });
-      report(`${user.username} админ боллоо`);
-      await loadAll();
-    } catch (err) {
-      report(err instanceof Error ? err.message : "Алдаа гарлаа", true);
+  async function changeRole(user: UserRow, role: Role) {
+    if (
+      role === "student" &&
+      !window.confirm(`${user.username}-ийн админ эрхийг хасах уу?`)
+    ) {
+      return;
     }
-  }
-
-  async function removeAdmin(user: UserRow) {
-    if (!window.confirm(`${user.username}-ийн админ эрхийг хасах уу?`)) return;
     try {
-      await api(`/admin/users/${user.id}/remove-admin`, { method: "PUT" });
-      report(`${user.username}-ийн админ эрх хасагдлаа`);
+      await api(`/admin/users/${user.id}/role`, {
+        method: "PUT",
+        body: JSON.stringify({ role }),
+      });
+      report(`${user.username}: ${ROLE_LABELS[role]}`);
       await loadAll();
     } catch (err) {
       report(err instanceof Error ? err.message : "Алдаа гарлаа", true);
@@ -110,7 +134,7 @@ export default function AdminUsers({ currentUserId, section }: Props) {
     try {
       await api("/admin/allowed-emails", {
         method: "POST",
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, role: newEmailRole, school_id: schoolId }),
       });
       setNewEmail("");
       report(`${email} жагсаалтад нэмэгдлээ`);
@@ -149,27 +173,25 @@ export default function AdminUsers({ currentUserId, section }: Props) {
                 <li key={u.id}>
                   <span className="admin-list-main">
                     {u.username}
-                    {u.is_admin && <span className="badge">админ</span>}
                     <small>{u.email}</small>
                   </span>
                   <span className="row-actions">
-                    {u.is_admin ? (
-                      <button
-                        type="button"
-                        onClick={() => removeAdmin(u)}
-                        disabled={u.id === currentUserId}
-                        title={
-                          u.id === currentUserId
-                            ? "Өөрийнхөө админ эрхийг хасах боломжгүй"
-                            : undefined
+                    {u.role === "platform_admin" || u.id === currentUserId ? (
+                      <span className="badge">{ROLE_LABELS[u.role]}</span>
+                    ) : (
+                      <select
+                        aria-label={`${u.username}-ийн эрх`}
+                        value={u.role}
+                        onChange={(event) =>
+                          changeRole(u, event.target.value as Role)
                         }
                       >
-                        Админ эрх хасах
-                      </button>
-                    ) : (
-                      <button type="button" onClick={() => makeAdmin(u)}>
-                        Админ болгох
-                      </button>
+                        {ROLE_OPTIONS.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                     )}
                   </span>
                 </li>
@@ -187,6 +209,17 @@ export default function AdminUsers({ currentUserId, section }: Props) {
                 placeholder="student@example.com"
                 required
               />
+              <select
+                aria-label="Эрх"
+                value={newEmailRole}
+                onChange={(event) => setNewEmailRole(event.target.value as Role)}
+              >
+                {ROLE_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
               <button type="submit">И-мэйл нэмэх</button>
             </form>
 
@@ -196,7 +229,10 @@ export default function AdminUsers({ currentUserId, section }: Props) {
               <ul className="admin-list">
                 {emails.map((item) => (
                   <li key={item.id}>
-                    <span className="admin-list-main">{item.email}</span>
+                    <span className="admin-list-main">
+                      {item.email}
+                      <span className="badge">{ROLE_LABELS[item.role]}</span>
+                    </span>
                     <span className="row-actions">
                       <button type="button" onClick={() => deleteEmail(item)}>
                         Устгах

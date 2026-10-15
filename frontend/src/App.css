@@ -407,3 +407,10 @@
    }
    
    .inline-form select { flex: 1 1 200px; width: auto; }
+/* ----- Subject teachers: checkbox list ----- */
+.teacher-picker { display: flex; flex-wrap: wrap; gap: 6px 16px; flex-basis: 100%; }
+.teacher-picker label { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.teacher-picker input[type="checkbox"] { width: auto; margin: 0; }
+.inline-form select { flex: 0 1 auto; width: auto; }
+.row-actions select { width: auto; margin: 0; padding: 6px 8px; font-size: 14px; }
+.topbar-right select { width: auto; margin: 0; }

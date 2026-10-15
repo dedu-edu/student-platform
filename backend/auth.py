@@ -11,10 +11,17 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import User
+from roles import (
+    ROLE_SCHOOL_ADMIN,
+    ROLE_PLATFORM_ADMIN,
+)
 
 load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
+
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY environment variable is required")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
@@ -93,13 +100,22 @@ def get_current_user(
 
     return user
 
-def get_current_admin(
-    current_user: User = Depends(get_current_user)
-):
-    if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
-        )
+def require_roles(*allowed_roles: str):
+    """Dependency factory: only users whose role is in allowed_roles get through."""
 
-    return current_user
+    def dependency(current_user: User = Depends(get_current_user)):
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to do this"
+            )
+
+        return current_user
+
+    return dependency
+
+
+get_current_school_admin = require_roles(
+    ROLE_SCHOOL_ADMIN, ROLE_PLATFORM_ADMIN
+)
+get_current_platform_admin = require_roles(ROLE_PLATFORM_ADMIN)

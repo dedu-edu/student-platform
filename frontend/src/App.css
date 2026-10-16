@@ -426,3 +426,7 @@
 .log-table th { color: var(--w-teal); font-weight: 400; }
 .log-table td { color: var(--w-ink); }
 .log-table small.block { display: block; color: var(--w-dim); }
+
+/* ----- Admin previewing the student view ----- */
+.preview-banner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 14px; padding: 8px 12px; margin: 0 0 12px; border: 1px dashed var(--w-teal); background: var(--w-panel-2); color: var(--w-teal); font-size: 14px; }
+.preview-banner button { margin: 0; padding: 6px 12px; font-size: 14px; }

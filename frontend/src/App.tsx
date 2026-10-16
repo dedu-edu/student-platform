@@ -182,6 +182,8 @@ function App() {
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null)
   const [editTeacherName, setEditTeacherName] = useState("")
   const [selectedTeacherKey, setSelectedTeacherKey] = useState<string | null>(null)
+  // an admin can preview the student side without switching accounts
+  const [viewAsStudent, setViewAsStudent] = useState(false)
 
   // Reload whenever someone logs in or the platform admin switches school.
   useEffect(() => {
@@ -981,6 +983,22 @@ function App() {
     setSelectedLab(null)
   }
 
+  // switch between the admin dashboard and the student view
+  function switchView(asStudent: boolean) {
+    backToSubjects()
+    setEditingLab(null)
+    setEditingSubject(null)
+    setEditingTeacher(null)
+    setMessage("")
+    setViewAsStudent(asStudent)
+
+    // show exactly what a student of this school sees right now
+    const token = localStorage.getItem("token")
+    if (asStudent && token) {
+      void loadSubjects(token)
+    }
+  }
+
   function logout() {
     const token = localStorage.getItem("token")
 
@@ -1004,6 +1022,7 @@ function App() {
     setSelectedLab(null)
     setAdminLabs([])
     setEditingLab(null)
+    setViewAsStudent(false)
   }
 
   if (!user) {
@@ -1070,7 +1089,7 @@ function App() {
     );
   }
 
-  if (isAdmin(user)) {
+  if (isAdmin(user) && !viewAsStudent) {
     const visibleLabs = labFilter
       ? adminLabs.filter((lab) => String(lab.subject_id) === labFilter)
       : adminLabs
@@ -1112,6 +1131,10 @@ function App() {
             <span className="topbar-user">
               Тавтай морил, <strong>{user.username}</strong>!
             </span>
+
+            <button onClick={() => switchView(true)}>
+              Сурагчийн харагдац
+            </button>
 
             <button onClick={logout}>
               Бүртгэлээс гарах
@@ -1686,9 +1709,25 @@ function App() {
     )
   }
 
+  // shown on every student screen while an admin previews it
+  const previewSchool = user.role === "platform_admin"
+    ? schools.find((school) => school.id === schoolId)?.name
+    : user.school_name
+  const previewBanner = isAdmin(user) && (
+    <div className="preview-banner" role="status">
+      <span>
+        Та сурагчийн харагдацыг үзэж байна{previewSchool && ` (${previewSchool})`}
+      </span>
+      <button onClick={() => switchView(false)}>
+        ← Админ руу буцах
+      </button>
+    </div>
+  )
+
   if (selectedLab) {
     return (
       <div>
+        {previewBanner}
         <header className="topbar">
           <h1>The Edenlock</h1>
         </header>
@@ -1729,6 +1768,7 @@ function App() {
 
     return (
       <div>
+        {previewBanner}
         <header className="topbar">
           <h1>The Edenlock</h1>
         </header>
@@ -1791,6 +1831,7 @@ function App() {
 
   return (
     <div>
+      {previewBanner}
       <header className="topbar">
         <h1>The Edenlock</h1>
 

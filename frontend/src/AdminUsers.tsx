@@ -167,11 +167,40 @@ export default function AdminUsers({
     }
   }
 
+  // the account registered with an email, if any
+  const accountFor = (email: string) =>
+    users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+
+  async function deleteUser(user: UserRow) {
+    if (
+      !window.confirm(
+        `${user.username}-ийн бүртгэлийг устгах уу?\n\nИ-мэйл нь зөвшөөрөгдсөн жагсаалтаас мөн хасагдана. Энэ үйлдлийг буцаах боломжгүй.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await api(`/admin/users/${user.id}`, { method: "DELETE" });
+      report(`${user.username} устгагдлаа`);
+      await loadAll();
+    } catch (err) {
+      report(err instanceof Error ? err.message : "Алдаа гарлаа", true);
+    }
+  }
+
   async function deleteEmail(item: AllowedEmail) {
-    if (!window.confirm(`${item.email}-ийг жагсаалтаас устгах уу?`)) return;
+    const account = accountFor(item.email);
+    const warning = account
+      ? `${item.email}-ийг устгах уу?\n\nЭнэ и-мэйлээр бүртгүүлсэн "${account.username}" хэрэглэгч мөн устгагдана. Энэ үйлдлийг буцаах боломжгүй.`
+      : `${item.email}-ийг жагсаалтаас устгах уу?`;
+    if (!window.confirm(warning)) return;
     try {
       await api(`/admin/allowed-emails/${item.id}`, { method: "DELETE" });
-      report(`${item.email} жагсаалтаас устгагдлаа`);
+      report(
+        account
+          ? `${item.email} болон ${account.username} устгагдлаа`
+          : `${item.email} жагсаалтаас устгагдлаа`,
+      );
       await loadAll();
     } catch (err) {
       report(err instanceof Error ? err.message : "Алдаа гарлаа", true);
@@ -231,6 +260,11 @@ export default function AdminUsers({
                         ))}
                       </select>
                     )}
+                    {u.role !== "platform_admin" && u.id !== currentUserId && (
+                      <button type="button" onClick={() => deleteUser(u)}>
+                        Устгах
+                      </button>
+                    )}
                   </span>
                 </li>
               ))}
@@ -270,6 +304,9 @@ export default function AdminUsers({
                     <span className="admin-list-main">
                       {item.email}
                       <span className="badge">{ROLE_LABELS[item.role]}</span>
+                      {accountFor(item.email) && (
+                        <small>бүртгүүлсэн: {accountFor(item.email)!.username}</small>
+                      )}
                     </span>
                     <span className="row-actions">
                       <button type="button" onClick={() => deleteEmail(item)}>

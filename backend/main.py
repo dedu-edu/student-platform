@@ -351,6 +351,48 @@ def set_user_role(
     return change_user_role(db, current_admin, user_id, data.role)
 
 
+def check_can_delete(actor: User, target: User):
+    if target.id == actor.id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot delete your own account"
+        )
+
+    if target.role == ROLE_PLATFORM_ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="Platform admins can only be changed in the database"
+        )
+
+
+def delete_account(db: Session, target: User):
+    """Remove a user, their log rows and their allowlist entry (caller commits)."""
+    db.query(models.ActivityLog).filter(
+        models.ActivityLog.user_id == target.id
+    ).delete(synchronize_session=False)
+    db.query(models.AllowedEmail).filter(
+        models.AllowedEmail.email == target.email
+    ).delete(synchronize_session=False)
+    db.delete(target)
+
+
+@app.delete("/admin/users/{user_id}")
+def delete_user(
+    user_id: int,
+    current_admin: User = Depends(get_current_school_admin),
+    db: Session = Depends(get_db)
+):
+    # the allowlist entry goes too, so the person cannot simply register again
+    target = get_school_user(db, current_admin, user_id)
+    check_can_delete(current_admin, target)
+
+    username = target.username
+    delete_account(db, target)
+    db.commit()
+
+    return {"message": "User deleted", "username": username}
+
+
 @app.put("/platform/users/{user_id}/school", response_model=UserResponse)
 def move_user_to_school(
     user_id: int,
@@ -476,10 +518,21 @@ def delete_allowed_email(
     if not item:
         raise HTTPException(status_code=404, detail="Email not found")
 
-    db.delete(item)
+    # removing someone's email also removes the account they registered with it
+    account = db.query(User).filter(User.email == item.email).first()
+
+    if account:
+        check_can_delete(current_admin, account)
+        delete_account(db, account)  # removes the allowlist entry too
+    else:
+        db.delete(item)
+
     db.commit()
 
-    return {"message": "Email removed from allowlist"}
+    return {
+        "message": "Email removed from allowlist",
+        "deleted_user": account.username if account else None
+    }
 
 
 # ---------------------------------------------------------- teachers

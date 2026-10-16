@@ -35,6 +35,10 @@ const EVENT_LABELS: Record<string, string> = {
   login: "Нэвтэрсэн",
   logout: "Гарсан",
   download: "Татсан",
+  view: "Үзсэн",
+  submit: "Даалгавар илгээсэн",
+  password_reset: "Нууц үг сэргээсэн (админ)",
+  password_change: "Нууц үг сольсон",
 };
 
 // local time, e.g. 2026-10-15 22:41

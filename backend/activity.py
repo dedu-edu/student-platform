@@ -15,6 +15,10 @@ EVENT_REGISTER = "register"
 EVENT_LOGIN = "login"
 EVENT_LOGOUT = "logout"
 EVENT_DOWNLOAD = "download"
+EVENT_SUBMIT = "submit"
+EVENT_VIEW = "view"  # opened a file's preview in the page
+EVENT_PASSWORD_RESET = "password_reset"  # an admin set a temporary password
+EVENT_PASSWORD_CHANGE = "password_change"
 
 # how often last_seen_at is written, so every request is not a database write
 LAST_SEEN_EVERY = timedelta(minutes=1)

@@ -1,4 +1,5 @@
 import os
+import secrets
 import uuid
 from urllib.parse import quote
 
@@ -22,6 +23,8 @@ from roles import (
 from schemas import (
     UserCreate,
     UserResponse,
+    PasswordChange,
+    PasswordReset,
     RoleUpdate,
     SchoolUpdate,
     SchoolCreate,
@@ -37,14 +40,20 @@ from schemas import (
     LabCreate,
     LabResponse,
     ActivityResponse,
-    UserActivitySummary
+    UserActivitySummary,
+    SubmissionResponse,
+    LabSubmissionRow
 )
 from activity import (
     log_event,
     EVENT_REGISTER,
     EVENT_LOGIN,
     EVENT_LOGOUT,
-    EVENT_DOWNLOAD
+    EVENT_DOWNLOAD,
+    EVENT_SUBMIT,
+    EVENT_VIEW,
+    EVENT_PASSWORD_RESET,
+    EVENT_PASSWORD_CHANGE
 )
 from auth import (
     hash_password,
@@ -54,6 +63,7 @@ from auth import (
     get_current_school_admin,
     get_current_platform_admin
 )
+from previews import preview_type
 from access import (
     visible_subjects,
     get_visible_subject,
@@ -111,6 +121,49 @@ def remove_files(filenames):
         supabase.storage.from_(SUPABASE_BUCKET).remove(names)
     except Exception:
         pass
+
+
+def file_response(file_data: bytes, original_filename: str):
+    """Send a file as a download, keeping non-Latin (e.g. Cyrillic) names."""
+    # headers must be latin-1, so the real name goes in filename* (RFC 6266)
+    # with a plain ASCII fallback in filename
+    ascii_filename = (
+        original_filename.encode("ascii", "replace").decode("ascii")
+        .replace("?", "_").replace('"', "_")
+    )
+
+    return Response(
+        content=file_data,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{ascii_filename}"; '
+                f"filename*=UTF-8''{quote(original_filename)}"
+            )
+        }
+    )
+
+
+def download_stored_file(stored_filename: str) -> bytes:
+    try:
+        file_data = supabase.storage.from_(SUPABASE_BUCKET).download(
+            stored_filename
+        )
+    except Exception:
+        file_data = None
+
+    if not file_data:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return file_data
+
+
+def submission_files(db: Session, *conditions):
+    """Delete matching submissions; return their stored files to remove after commit."""
+    query = db.query(models.Submission).filter(*conditions)
+    files = [submission.filename for submission in query.all()]
+    query.delete(synchronize_session=False)
+    return files
 
 
 @app.get("/")
@@ -217,6 +270,45 @@ def get_me(
     current_user: User = Depends(get_current_user)
 ):
     return current_user
+
+
+MIN_PASSWORD_LENGTH = 8
+
+# no 0/O, 1/l/I: the admin reads the temporary password out to the student
+TEMP_PASSWORD_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
+
+
+@app.post("/me/password")
+def change_my_password(
+    data: PasswordChange,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not verify_password(data.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=400,
+            detail="Current password is incorrect"
+        )
+
+    if len(data.new_password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+        )
+
+    if data.new_password == data.current_password:
+        raise HTTPException(
+            status_code=400,
+            detail="New password must be different"
+        )
+
+    current_user.password_hash = hash_password(data.new_password)
+    current_user.must_change_password = False
+    log_event(db, current_user, EVENT_PASSWORD_CHANGE, request)
+    db.commit()
+
+    return {"message": "Password changed"}
 
 
 # ------------------------------------------------- platform: schools
@@ -365,8 +457,49 @@ def check_can_delete(actor: User, target: User):
         )
 
 
+@app.post("/admin/users/{user_id}/reset-password", response_model=PasswordReset)
+def reset_user_password(
+    user_id: int,
+    request: Request,
+    current_admin: User = Depends(get_current_school_admin),
+    db: Session = Depends(get_db)
+):
+    target = get_school_user(db, current_admin, user_id)
+
+    if target.id == current_admin.id:
+        raise HTTPException(
+            status_code=400,
+            detail="Change your own password from your account instead"
+        )
+
+    if target.role == ROLE_PLATFORM_ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="Platform admins can only be changed in the database"
+        )
+
+    temporary_password = "".join(
+        secrets.choice(TEMP_PASSWORD_ALPHABET) for _ in range(10)
+    )
+
+    # the student must replace it the next time they log in
+    target.password_hash = hash_password(temporary_password)
+    target.must_change_password = True
+    log_event(
+        db, target, EVENT_PASSWORD_RESET, request,
+        detail=current_admin.username  # who reset it
+    )
+    db.commit()
+
+    return {"temporary_password": temporary_password}
+
+
 def delete_account(db: Session, target: User):
-    """Remove a user, their log rows and their allowlist entry (caller commits)."""
+    """
+    Remove a user, their log rows, submissions and allowlist entry. The caller
+    commits, then removes the returned stored files.
+    """
+    files = submission_files(db, models.Submission.user_id == target.id)
     db.query(models.ActivityLog).filter(
         models.ActivityLog.user_id == target.id
     ).delete(synchronize_session=False)
@@ -374,6 +507,7 @@ def delete_account(db: Session, target: User):
         models.AllowedEmail.email == target.email
     ).delete(synchronize_session=False)
     db.delete(target)
+    return files
 
 
 @app.delete("/admin/users/{user_id}")
@@ -387,8 +521,9 @@ def delete_user(
     check_can_delete(current_admin, target)
 
     username = target.username
-    delete_account(db, target)
+    files = delete_account(db, target)
     db.commit()
+    remove_files(files)
 
     return {"message": "User deleted", "username": username}
 
@@ -520,14 +655,16 @@ def delete_allowed_email(
 
     # removing someone's email also removes the account they registered with it
     account = db.query(User).filter(User.email == item.email).first()
+    files = []
 
     if account:
         check_can_delete(current_admin, account)
-        delete_account(db, account)  # removes the allowlist entry too
+        files = delete_account(db, account)  # removes the allowlist entry too
     else:
         db.delete(item)
 
     db.commit()
+    remove_files(files)
 
     return {
         "message": "Email removed from allowlist",
@@ -763,7 +900,11 @@ def delete_subject(
         models.Lab.subject_id == subject_id
     ).all()
 
-    stored_files = [lab.filename for lab in labs]
+    lab_ids = [lab.id for lab in labs]
+    stored_files = lab_file_names(db, lab_ids)
+    stored_files += submission_files(
+        db, models.Submission.lab_id.in_(lab_ids)
+    )
 
     db.query(models.Lab).filter(
         models.Lab.subject_id == subject_id
@@ -793,6 +934,22 @@ def get_subject_labs(
     return db.query(models.Lab).filter(
         models.Lab.subject_id == subject_id
     ).order_by(models.Lab.id).all()
+
+
+@app.get("/labs", response_model=list[LabResponse])
+def get_labs(
+    school_id: int | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Every lab the user can see, for search and the "Шинэ" badges."""
+    query = visible_labs(db, current_user)
+
+    # the platform admin previewing the student side looks at one school
+    if current_user.role == ROLE_PLATFORM_ADMIN and school_id:
+        query = query.filter(models.Subject.school_id == school_id)
+
+    return query.order_by(models.Lab.id).all()
 
 
 @app.get("/admin/labs", response_model=list[LabResponse])
@@ -859,7 +1016,9 @@ def create_lab(
         subject_id=lab.subject_id,
         title=title,
         description=lab.description,
-        teacher_id=lab_teacher_for(subject, lab)
+        teacher_id=lab_teacher_for(subject, lab),
+        accepts_submissions=lab.accepts_submissions,
+        submission_deadline=lab.submission_deadline
     )
 
     db.add(new_lab)
@@ -905,6 +1064,11 @@ def update_lab(
     existing_lab.description = lab.description
     existing_lab.teacher_id = teacher_id
 
+    if "accepts_submissions" in lab.model_fields_set:
+        existing_lab.accepts_submissions = lab.accepts_submissions
+    if "submission_deadline" in lab.model_fields_set:
+        existing_lab.submission_deadline = lab.submission_deadline
+
     db.commit()
     db.refresh(existing_lab)
 
@@ -919,17 +1083,52 @@ def delete_lab(
 ):
     lab = get_visible_lab(db, current_admin, lab_id)
 
-    stored_filename = lab.filename
+    stored_files = lab_file_names(db, [lab.id])
+    stored_files += submission_files(db, models.Submission.lab_id == lab.id)
 
     db.delete(lab)
     db.commit()
 
-    remove_files([stored_filename])
+    remove_files(stored_files)
 
     return {"message": "Lab deleted successfully"}
 
 
-@app.post("/admin/labs/{lab_id}/upload")
+def storage_key(folder: str, original_filename: str):
+    """A plain-ASCII storage name; the real name is kept in the database."""
+    extension = os.path.splitext(original_filename)[1]
+    if not (extension[1:].isascii() and extension[1:].isalnum()):
+        extension = ""
+    return f"{folder}/{uuid.uuid4().hex}{extension}"
+
+
+def upload_to_storage(stored_filename: str, file_data: bytes, content_type):
+    try:
+        supabase.storage.from_(SUPABASE_BUCKET).upload(
+            stored_filename,
+            file_data,
+            {
+                "content-type": content_type or "application/octet-stream",
+                "upsert": "false"
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload file: {str(e)}"
+        )
+
+
+def lab_file_names(db: Session, lab_ids):
+    """Delete the labs' file rows; return stored files to remove after commit."""
+    query = db.query(models.LabFile).filter(models.LabFile.lab_id.in_(lab_ids))
+    files = [lab_file.filename for lab_file in query.all()]
+    query.delete(synchronize_session=False)
+    return files
+
+
+# a lab can have several files: each upload adds one
+@app.post("/admin/labs/{lab_id}/upload", response_model=LabResponse)
 async def upload_lab_file(
     lab_id: int,
     file: UploadFile = File(...),
@@ -945,151 +1144,321 @@ async def upload_lab_file(
         )
 
     original_filename = os.path.basename(file.filename)
-
-    stored_filename = (
-        f"{uuid.uuid4().hex}_{original_filename}"
-    )
-
+    stored_filename = storage_key(f"labs/{lab.id}", original_filename)
     file_data = await file.read()
 
-    try:
-        supabase.storage.from_(SUPABASE_BUCKET).upload(
-            stored_filename,
-            file_data,
-            {
-                "content-type": file.content_type or "application/octet-stream",
-                "upsert": "false"
-            }
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to upload file: {str(e)}"
-        )
+    upload_to_storage(stored_filename, file_data, file.content_type)
 
-    lab.filename = stored_filename
-
+    db.add(models.LabFile(
+        lab_id=lab.id,
+        filename=stored_filename,
+        original_name=original_filename,
+        size=len(file_data)
+    ))
     db.commit()
     db.refresh(lab)
 
-    return {
-        "message": "File uploaded successfully",
-        "filename": original_filename
-    }
+    return lab
 
 
-@app.put("/admin/labs/{lab_id}/file")
-async def update_lab_file(
+@app.delete("/admin/labs/{lab_id}/files/{file_id}", response_model=LabResponse)
+def delete_lab_file(
     lab_id: int,
-    file: UploadFile = File(...),
+    file_id: int,
     current_admin: User = Depends(get_current_school_admin),
     db: Session = Depends(get_db)
 ):
     lab = get_visible_lab(db, current_admin, lab_id)
+    lab_file = get_lab_file(db, lab, file_id)
 
-    if not file.filename:
-        raise HTTPException(
-            status_code=400,
-            detail="No filename provided"
-        )
-
-    old_filename = lab.filename
-
-    original_filename = os.path.basename(file.filename)
-
-    stored_filename = (
-        f"{uuid.uuid4().hex}_{original_filename}"
-    )
-
-    file_data = await file.read()
-
-    try:
-        supabase.storage.from_(SUPABASE_BUCKET).upload(
-            stored_filename,
-            file_data,
-            {
-                "content-type": file.content_type or "application/octet-stream",
-                "upsert": "false"
-            }
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to upload file: {str(e)}"
-        )
-
-    lab.filename = stored_filename
-
+    stored_filename = lab_file.filename
+    db.delete(lab_file)
     db.commit()
     db.refresh(lab)
 
-    remove_files([old_filename])
+    remove_files([stored_filename])
 
-    return {
-        "message": "File updated successfully",
-        "filename": original_filename
-    }
+    return lab
 
 
-@app.get("/labs/{lab_id}/download")
+def get_lab_file(db: Session, lab, file_id: int):
+    lab_file = db.query(models.LabFile).filter(
+        models.LabFile.id == file_id,
+        models.LabFile.lab_id == lab.id
+    ).first()
+
+    if not lab_file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return lab_file
+
+
+@app.get("/labs/{lab_id}/files/{file_id}/download")
 def download_lab_file(
     lab_id: int,
+    file_id: int,
     request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     lab = get_visible_lab(db, current_user, lab_id)
-
-    if not lab.filename:
-        raise HTTPException(
-            status_code=404,
-            detail="This lab does not have a file"
-        )
-
-    try:
-        file_data = supabase.storage.from_(
-            SUPABASE_BUCKET
-        ).download(lab.filename)
-    except Exception:
-        raise HTTPException(
-            status_code=404,
-            detail="File not found"
-        )
-
-    if not file_data:
-        raise HTTPException(
-            status_code=404,
-            detail="File not found"
-        )
-
-    if "_" in lab.filename:
-        original_filename = lab.filename.split("_", 1)[1]
-    else:
-        original_filename = lab.filename
+    lab_file = get_lab_file(db, lab, file_id)
+    file_data = download_stored_file(lab_file.filename)
 
     log_event(
         db, current_user, EVENT_DOWNLOAD, request,
-        detail=f"{lab.title}: {original_filename}"
+        detail=f"{lab.title}: {lab_file.original_name}"
     )
     db.commit()
 
-    # headers must be latin-1, so non-Latin names (e.g. Cyrillic) go in
-    # filename* (RFC 6266) with a plain ASCII fallback in filename
-    ascii_filename = (
-        original_filename.encode("ascii", "replace").decode("ascii")
-        .replace("?", "_").replace('"', "_")
+    return file_response(file_data, lab_file.original_name)
+
+
+@app.get("/labs/{lab_id}/files/{file_id}/preview")
+def preview_lab_file(
+    lab_id: int,
+    file_id: int,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    lab = get_visible_lab(db, current_user, lab_id)
+    lab_file = get_lab_file(db, lab, file_id)
+    media_type = preview_type(lab_file.original_name)
+
+    if not media_type:
+        raise HTTPException(
+            status_code=400,
+            detail="This file cannot be previewed"
+        )
+
+    file_data = download_stored_file(lab_file.filename)
+
+    log_event(
+        db, current_user, EVENT_VIEW, request,
+        detail=f"{lab.title}: {lab_file.original_name}"
     )
+    db.commit()
 
     return Response(
         content=file_data,
-        media_type="application/octet-stream",
-        headers={
-            "Content-Disposition": (
-                f'attachment; filename="{ascii_filename}"; '
-                f"filename*=UTF-8''{quote(original_filename)}"
-            )
-        }
+        media_type=media_type,
+        headers={"X-Content-Type-Options": "nosniff"}
     )
+
+
+# ------------------------------------------------------- submissions
+
+MAX_SUBMISSION_BYTES = 10 * 1024 * 1024
+
+# ordinary schoolwork only: no videos, programs, disk images...
+SUBMISSION_EXTENSIONS = {
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt",
+    ".ods", ".odp", ".txt", ".md", ".csv", ".rtf",
+    ".zip", ".rar", ".7z",
+    ".png", ".jpg", ".jpeg", ".gif", ".webp",
+    ".py", ".ipynb", ".c", ".cpp", ".h", ".java", ".js", ".ts", ".html",
+    ".css", ".sql", ".json", ".m", ".r",
+}
+
+
+def check_submissions_open(lab):
+    if not lab.accepts_submissions:
+        raise HTTPException(
+            status_code=403,
+            detail="This lab does not take submissions"
+        )
+
+    if not lab.submissions_open:
+        raise HTTPException(
+            status_code=403,
+            detail="The deadline for this lab has passed"
+        )
+
+
+def my_submission(db: Session, user: User, lab_id: int):
+    return db.query(models.Submission).filter(
+        models.Submission.lab_id == lab_id,
+        models.Submission.user_id == user.id
+    ).first()
+
+
+@app.get("/labs/{lab_id}/submission", response_model=SubmissionResponse | None)
+def get_my_submission(
+    lab_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    get_visible_lab(db, current_user, lab_id)
+
+    return my_submission(db, current_user, lab_id)
+
+
+@app.post("/labs/{lab_id}/submission", response_model=SubmissionResponse)
+async def submit_lab(
+    lab_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    lab = get_visible_lab(db, current_user, lab_id)
+
+    if current_user.role != ROLE_STUDENT:
+        raise HTTPException(
+            status_code=403,
+            detail="Only students hand in work"
+        )
+
+    check_submissions_open(lab)
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
+    if os.path.splitext(file.filename)[1].lower() not in SUBMISSION_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="This file type is not allowed"
+        )
+
+    # never read more than the limit into memory
+    file_data = await file.read(MAX_SUBMISSION_BYTES + 1)
+
+    if not file_data:
+        raise HTTPException(status_code=400, detail="The file is empty")
+
+    if len(file_data) > MAX_SUBMISSION_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="File is too large (max 10 MB)"
+        )
+
+    original_filename = os.path.basename(file.filename)
+    stored_filename = storage_key(f"submissions/{lab.id}", original_filename)
+
+    upload_to_storage(stored_filename, file_data, file.content_type)
+
+    # handing in again replaces the earlier file
+    submission = my_submission(db, current_user, lab.id)
+    old_filename = submission.filename if submission else None
+
+    if submission:
+        submission.filename = stored_filename
+        submission.original_name = original_filename
+        submission.updated_at = models.utcnow()
+    else:
+        submission = models.Submission(
+            lab_id=lab.id,
+            user_id=current_user.id,
+            filename=stored_filename,
+            original_name=original_filename
+        )
+        db.add(submission)
+
+    log_event(
+        db, current_user, EVENT_SUBMIT, request,
+        detail=f"{lab.title}: {original_filename}"
+    )
+    db.commit()
+    db.refresh(submission)
+
+    remove_files([old_filename])
+
+    return submission
+
+
+@app.delete("/labs/{lab_id}/submission")
+def withdraw_submission(
+    lab_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    lab = get_visible_lab(db, current_user, lab_id)
+    # after the deadline the hand-in stays as it is
+    check_submissions_open(lab)
+    submission = my_submission(db, current_user, lab_id)
+
+    if not submission:
+        raise HTTPException(status_code=404, detail="Nothing handed in")
+
+    stored_filename = submission.filename
+    db.delete(submission)
+    db.commit()
+
+    remove_files([stored_filename])
+
+    return {"message": "Submission removed"}
+
+
+@app.get(
+    "/admin/labs/{lab_id}/submissions",
+    response_model=list[LabSubmissionRow]
+)
+def get_lab_submissions(
+    lab_id: int,
+    current_admin: User = Depends(get_current_school_admin),
+    db: Session = Depends(get_db)
+):
+    lab = get_visible_lab(db, current_admin, lab_id)
+    school_id = lab_school_id(db, lab)
+
+    # every student of the lab's school, so the admin also sees who is missing
+    students = db.query(User).filter(
+        User.school_id == school_id,
+        User.role == ROLE_STUDENT
+    ).order_by(User.username).all()
+
+    submissions = {
+        submission.user_id: submission
+        for submission in db.query(models.Submission).filter(
+            models.Submission.lab_id == lab.id
+        ).all()
+    }
+
+    # someone who handed in and later moved school still shows up
+    student_ids = {student.id for student in students}
+    students += [
+        submission.user for user_id, submission in submissions.items()
+        if user_id not in student_ids and submission.user
+    ]
+
+    return [
+        LabSubmissionRow(
+            user_id=student.id,
+            username=student.username,
+            email=student.email,
+            submission=submissions.get(student.id)
+        )
+        for student in students
+    ]
+
+
+def lab_school_id(db: Session, lab):
+    return db.query(models.Subject.school_id).filter(
+        models.Subject.id == lab.subject_id
+    ).scalar()
+
+
+@app.get("/admin/submissions/{submission_id}/download")
+def download_submission(
+    submission_id: int,
+    current_admin: User = Depends(get_current_school_admin),
+    db: Session = Depends(get_db)
+):
+    submission = db.query(models.Submission).filter(
+        models.Submission.id == submission_id
+    ).first()
+
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    # raises 404 if the lab belongs to another school
+    get_visible_lab(db, current_admin, submission.lab_id)
+
+    file_data = download_stored_file(submission.filename)
+    username = submission.user.username if submission.user else "student"
+
+    return file_response(file_data, f"{username}_{submission.original_name}")
 
 
 # ---------------------------------------------------------- activity log

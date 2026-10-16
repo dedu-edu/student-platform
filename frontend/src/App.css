@@ -430,3 +430,32 @@
 /* ----- Admin previewing the student view ----- */
 .preview-banner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 14px; padding: 8px 12px; margin: 0 0 12px; border: 1px dashed var(--w-teal); background: var(--w-panel-2); color: var(--w-teal); font-size: 14px; }
 .preview-banner button { margin: 0; padding: 6px 12px; font-size: 14px; }
+
+/* ----- Temporary password after a reset ----- */
+.temp-password { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 14px; padding: 10px 12px; margin: 0 0 12px; border: 1px dashed var(--w-teal); color: var(--w-ink); }
+.temp-password > span:first-child { text-align: left; }
+.temp-password code { font-size: 17px; letter-spacing: 1px; color: var(--w-teal); background: transparent; padding: 0; user-select: all; }
+.temp-password small.block, .submission small.block { display: block; color: var(--w-dim); }
+.temp-password button { margin: 0; }
+
+/* ----- Handing in a lab ----- */
+.submission { margin-top: 20px; }
+.submission .inline-form input[type=file] { flex: 1 1 220px; }
+
+/* ----- "Шинэ" badges, lab search, lab files ----- */
+.tile-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.tile-badge.new { color: var(--w-bg); background: var(--w-teal); border-color: var(--w-teal); }
+.lab-search { margin-top: 12px; }
+.lab-search input { flex: 1 1 100%; }
+.lab-files .admin-list { margin-bottom: 12px; }
+.file-preview { margin: 0 0 16px; border: 1px solid var(--w-line); background: var(--w-panel); }
+.file-preview iframe { display: block; width: 100%; height: min(75vh, 900px); border: 0; background: #fff; }
+.file-preview img { display: block; max-width: 100%; max-height: 75vh; margin: 0 auto; }
+.lab-file-manager .admin-list { margin-bottom: 8px; }
+.lab-file-manager small.block { display: block; color: var(--w-dim); margin-bottom: 8px; }
+
+/* ----- Hand-in settings on a lab ----- */
+.submission-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+.submission-settings label { display: flex; align-items: center; gap: 8px; margin: 0; }
+.submission-settings input[type=checkbox] { width: auto; margin: 0; }
+.submission-settings input[type=datetime-local] { width: auto; margin: 0; }

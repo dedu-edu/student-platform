@@ -3,6 +3,16 @@ import "./App.css"
 import Register from "./Register";
 import AdminUsers from "./AdminUsers";
 import ActivityLog from "./ActivityLog";
+import ChangePassword from "./ChangePassword";
+import {
+  LabSubmission,
+  LabSubmissions,
+  SubmissionSettings,
+  toLocalInput,
+  fromLocalInput,
+} from "./Submissions";
+import { LabFileList, LabFileManager, uploadLabFiles } from "./LabFiles";
+import type { LabFile } from "./LabFiles";
 const API_URL = import.meta.env.VITE_API_URL;
 
 type Role = "student" | "school_admin" | "platform_admin"
@@ -15,6 +25,8 @@ type User = {
   school_id: number | null
   school_name: string | null
   is_admin: boolean
+  // an admin gave this user a temporary password
+  must_change_password: boolean
 }
 
 type AdminTab = "schools" | "teachers" | "subjects" | "labs" | "users" | "emails" | "log"
@@ -62,10 +74,30 @@ type Lab = {
   subject_id: number
   title: string
   description: string | null
-  filename: string | null
   teacher_id: number | null
   teacher_name: string | null
+  created_at: string | null
+  files: LabFile[]
+  // hand-ins: turned on by an admin, optionally until a deadline
+  accepts_submissions: boolean
+  submission_deadline: string | null
+  submissions_open: boolean
 }
+
+// "Шинэ": the lab, or one of its files, was added in the last week
+const NEW_FOR_DAYS = 7
+
+function isNew(lab: Lab) {
+  const since = Date.now() - NEW_FOR_DAYS * 24 * 60 * 60 * 1000
+  return [lab.created_at, ...lab.files.map((file) => file.created_at)].some(
+    (time) => time !== null && new Date(time).getTime() >= since
+  )
+}
+
+const countNew = (labs: Lab[]) => labs.filter(isNew).length
+
+const fileNames = (lab: Lab) =>
+  lab.files.map((file) => file.original_name).join(", ")
 
 function TeacherPicker({
   teachers,
@@ -152,7 +184,7 @@ function App() {
   const [newLabTitle, setNewLabTitle] = useState("")
   const [newLabDescription, setNewLabDescription] = useState("")
   const [newLabSubjectId, setNewLabSubjectId] = useState("")
-  const [labFile, setLabFile] = useState<File | null>(null)
+  const [labFiles, setLabFiles] = useState<File[]>([])
 
   const [adminLabs, setAdminLabs] = useState<Lab[]>([])
 
@@ -160,7 +192,6 @@ function App() {
   const [editLabTitle, setEditLabTitle] = useState("")
   const [editLabDescription, setEditLabDescription] = useState("")
   const [editLabSubjectId, setEditLabSubjectId] = useState("")
-  const [editLabFile, setEditLabFile] = useState<File | null>(null)
   const [showRegister, setShowRegister] = useState(false);
   const [adminTab, setAdminTab] = useState<AdminTab>("subjects")
   const [labFilter, setLabFilter] = useState("")
@@ -178,22 +209,34 @@ function App() {
   const [editSubjectTeacherIds, setEditSubjectTeacherIds] = useState<number[]>([])
   const [newLabTeacherId, setNewLabTeacherId] = useState("")
   const [editLabTeacherId, setEditLabTeacherId] = useState("")
+  const [newLabAccepts, setNewLabAccepts] = useState(false)
+  const [newLabDeadline, setNewLabDeadline] = useState("")
+  const [editLabAccepts, setEditLabAccepts] = useState(false)
+  const [editLabDeadline, setEditLabDeadline] = useState("")
   const [newTeacherName, setNewTeacherName] = useState("")
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null)
   const [editTeacherName, setEditTeacherName] = useState("")
   const [selectedTeacherKey, setSelectedTeacherKey] = useState<string | null>(null)
   // an admin can preview the student side without switching accounts
   const [viewAsStudent, setViewAsStudent] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
+  // the lab whose hand-ins the admin is looking at
+  const [submissionsLab, setSubmissionsLab] = useState<Lab | null>(null)
+  // every lab the student can see: search and the "Шинэ" badges
+  const [allLabs, setAllLabs] = useState<Lab[]>([])
+  const [search, setSearch] = useState("")
 
   // Reload whenever someone logs in or the platform admin switches school.
   useEffect(() => {
     const token = localStorage.getItem("token")
 
-    if (!user || !token) {
+    // nothing else loads until a temporary password has been replaced
+    if (!user || !token || user.must_change_password) {
       return
     }
 
     void loadSubjects(token)
+    void loadAllLabs(token)
 
     if (isAdmin(user)) {
       void loadSchoolTeachers(token)
@@ -208,7 +251,7 @@ function App() {
   // The Labs tab needs every lab the user may manage, so load them when it opens
   // (and again whenever the subjects list is refreshed after an add/edit).
   useEffect(() => {
-    if (user && isAdmin(user) && adminTab === "labs") {
+    if (user && isAdmin(user) && !user.must_change_password && adminTab === "labs") {
       void loadAllAdminLabs()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -343,6 +386,21 @@ function App() {
     }
 
     setSubjects(data)
+  }
+
+  async function loadAllLabs(token: string) {
+    const response = await fetch(
+      `${API_URL}/labs${schoolQuery()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    )
+
+    if (response.ok) {
+      setAllLabs(await response.json())
+    }
   }
 
   async function loadSchoolTeachers(token: string) {
@@ -550,51 +608,6 @@ function App() {
     setSelectedLab(data)
   }
 
-  async function downloadLab() {
-    const token = localStorage.getItem("token")
-
-    if (!token || !selectedLab) {
-      return
-    }
-
-    try {
-      const response = await fetch(
-        `${API_URL}/labs/${selectedLab.id}/download`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      )
-
-      if (!response.ok) {
-        const data = await response.json()
-        setMessage(data.detail || "Суулгаж чадсангүй")
-        return
-      }
-
-      const blob = await response.blob()
-      const downloadUrl = window.URL.createObjectURL(blob)
-
-      const link = document.createElement("a")
-
-      link.href = downloadUrl
-      link.download = selectedLab.filename
-        ? selectedLab.filename.split("_").slice(1).join("_")
-        : "download"
-
-      document.body.appendChild(link)
-      link.click()
-
-      link.remove()
-      window.URL.revokeObjectURL(downloadUrl)
-
-    } catch (error) {
-      setMessage("Суулгаж чадсангүй")
-      console.error(error)
-    }
-  }
-
   async function createSubject(event: React.FormEvent) {
     event.preventDefault()
 
@@ -751,7 +764,9 @@ function App() {
           subject_id: Number(newLabSubjectId),
           title: newLabTitle,
           description: newLabDescription,
-          teacher_id: newLabTeacherId ? Number(newLabTeacherId) : null
+          teacher_id: newLabTeacherId ? Number(newLabTeacherId) : null,
+          accepts_submissions: newLabAccepts,
+          submission_deadline: newLabAccepts ? fromLocalInput(newLabDeadline) : null
         })
       }
     )
@@ -763,53 +778,28 @@ function App() {
       return
     }
 
-    if (labFile) {
-      await uploadFile(data.id, token)
-    } else {
+    try {
+      await uploadLabFiles(data.id, labFiles)
       setMessage("Амжилттай лаб үүсгэж чадлаа!")
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? `Лаб үүслээ, гэхдээ file байрлуулж чадсангүй: ${error.message}`
+          : "file байрлуулж чадсангүй."
+      )
     }
 
     setNewLabTitle("")
     setNewLabDescription("")
     setNewLabSubjectId("")
     setNewLabTeacherId("")
-    setLabFile(null)
+    setNewLabAccepts(false)
+    setNewLabDeadline("")
+    setLabFiles([])
     // the file input is not controlled by React, so clear it here
     form.reset()
 
     await loadSubjects(token)
-  }
-
-  async function uploadFile(labId: number, token: string) {
-    if (!labFile) {
-      return
-    }
-
-    const formData = new FormData()
-
-    formData.append("file", labFile)
-
-    const response = await fetch(
-      `${API_URL}/admin/labs/${labId}/upload`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
-        body: formData
-      }
-    )
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      setMessage(
-        data.detail || "file байрлуулж чадсангүй."
-      )
-      return
-    }
-
-    setMessage("File байрлуулж чадлаа!")
   }
 
   async function loadAllAdminLabs() {
@@ -846,7 +836,8 @@ function App() {
     setEditLabDescription(lab.description || "")
     setEditLabSubjectId(String(lab.subject_id))
     setEditLabTeacherId(lab.teacher_id ? String(lab.teacher_id) : "")
-    setEditLabFile(null)
+    setEditLabAccepts(lab.accepts_submissions)
+    setEditLabDeadline(toLocalInput(lab.submission_deadline))
     setMessage("")
   }
 
@@ -898,7 +889,6 @@ function App() {
 
   function cancelEditingLab() {
     setEditingLab(null)
-    setEditLabFile(null)
     setMessage("")
   }
 
@@ -928,7 +918,9 @@ function App() {
           subject_id: Number(editLabSubjectId),
           title: editLabTitle,
           description: editLabDescription,
-          teacher_id: editLabTeacherId ? Number(editLabTeacherId) : null
+          teacher_id: editLabTeacherId ? Number(editLabTeacherId) : null,
+          accepts_submissions: editLabAccepts,
+          submission_deadline: editLabAccepts ? fromLocalInput(editLabDeadline) : null
         })
       }
     )
@@ -940,34 +932,9 @@ function App() {
       return
     }
 
-    if (editLabFile) {
-      const formData = new FormData()
-
-      formData.append("file", editLabFile)
-
-      const fileResponse = await fetch(
-        `${API_URL}/admin/labs/${editingLab.id}/file`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
-          body: formData
-        }
-      )
-
-      if (!fileResponse.ok) {
-        setMessage(
-          "file-ыг шинэчилж чадсангүй"
-        )
-        return
-      }
-    }
-
     setMessage("Лабыг шинэчиллээ!")
 
     setEditingLab(null)
-    setEditLabFile(null)
 
     await loadSubjects(token)
   }
@@ -989,6 +956,7 @@ function App() {
     setEditingLab(null)
     setEditingSubject(null)
     setEditingTeacher(null)
+    setSubmissionsLab(null)
     setMessage("")
     setViewAsStudent(asStudent)
 
@@ -996,6 +964,7 @@ function App() {
     const token = localStorage.getItem("token")
     if (asStudent && token) {
       void loadSubjects(token)
+      void loadAllLabs(token)
     }
   }
 
@@ -1022,7 +991,11 @@ function App() {
     setSelectedLab(null)
     setAdminLabs([])
     setEditingLab(null)
+    setSubmissionsLab(null)
+    setAllLabs([])
+    setSearch("")
     setViewAsStudent(false)
+    setShowChangePassword(false)
   }
 
   if (!user) {
@@ -1089,6 +1062,22 @@ function App() {
     );
   }
 
+  if (user.must_change_password || showChangePassword) {
+    return (
+      <ChangePassword
+        forced={user.must_change_password}
+        onDone={() => {
+          setShowChangePassword(false)
+          setMessage("")
+          setUser({ ...user, must_change_password: false })
+        }}
+        onCancel={() =>
+          user.must_change_password ? logout() : setShowChangePassword(false)
+        }
+      />
+    )
+  }
+
   if (isAdmin(user) && !viewAsStudent) {
     const visibleLabs = labFilter
       ? adminLabs.filter((lab) => String(lab.subject_id) === labFilter)
@@ -1113,6 +1102,7 @@ function App() {
                   setEditingLab(null)
                   setEditingSubject(null)
                   setEditingTeacher(null)
+                  setSubmissionsLab(null)
                   setMessage("")
                 }}
               >
@@ -1136,6 +1126,10 @@ function App() {
               Сурагчийн харагдац
             </button>
 
+            <button onClick={() => setShowChangePassword(true)}>
+              Нууц үг солих
+            </button>
+
             <button onClick={logout}>
               Бүртгэлээс гарах
             </button>
@@ -1151,6 +1145,7 @@ function App() {
               className={adminTab === tab.id ? "tab active" : "tab"}
               onClick={() => {
                 setAdminTab(tab.id)
+                setSubmissionsLab(null)
                 setMessage("")
               }}
             >
@@ -1416,7 +1411,15 @@ function App() {
           </section>
         )}
 
-        {adminTab === "labs" && (
+        {adminTab === "labs" && submissionsLab && (
+          <LabSubmissions
+            key={submissionsLab.id}
+            lab={submissionsLab}
+            onClose={() => setSubmissionsLab(null)}
+          />
+        )}
+
+        {adminTab === "labs" && !submissionsLab && (
           <section className="win">
             <h2 className="win-title">
               {editingLab ? "Лабыг шинэчлэх" : "Лабууд"}
@@ -1489,15 +1492,27 @@ function App() {
                   </div>
 
                   <div className="span-2">
-                    <label>File-ыг солих</label>
+                    <SubmissionSettings
+                      accepts={editLabAccepts}
+                      deadline={editLabDeadline}
+                      onChange={(accepts, deadline) => {
+                        setEditLabAccepts(accepts)
+                        setEditLabDeadline(deadline)
+                      }}
+                    />
+                  </div>
 
-                    <input
-                      type="file"
-                      onChange={(event) =>
-                        setEditLabFile(
-                          event.target.files?.[0] || null
+                  <div className="span-2">
+                    <label>File-ууд (нэмэх, устгах нь шууд хадгалагдана)</label>
+
+                    <LabFileManager
+                      lab={editingLab}
+                      onChange={(lab) => {
+                        setEditingLab(lab)
+                        setAdminLabs((current) =>
+                          current.map((item) => (item.id === lab.id ? lab : item))
                         )
-                      }
+                      }}
                     />
                   </div>
 
@@ -1590,14 +1605,24 @@ function App() {
                       </div>
 
                       <div className="span-2">
-                        <label>Лабын file</label>
+                        <SubmissionSettings
+                          accepts={newLabAccepts}
+                          deadline={newLabDeadline}
+                          onChange={(accepts, deadline) => {
+                            setNewLabAccepts(accepts)
+                            setNewLabDeadline(deadline)
+                          }}
+                        />
+                      </div>
+
+                      <div className="span-2">
+                        <label>Лабын file-ууд (хэд хэдийг сонгож болно)</label>
 
                         <input
                           type="file"
+                          multiple
                           onChange={(event) =>
-                            setLabFile(
-                              event.target.files?.[0] || null
-                            )
+                            setLabFiles(Array.from(event.target.files ?? []))
                           }
                         />
                       </div>
@@ -1651,6 +1676,14 @@ function App() {
                               {lab.teacher_name ?? "Багшгүй"}
                             </span>
 
+                            {lab.accepts_submissions && (
+                              <span className="badge">
+                                {lab.submissions_open
+                                  ? "Илгээлт нээлттэй"
+                                  : "Илгээх хугацаа дууссан"}
+                              </span>
+                            )}
+
                             {lab.description && (
                               <small className="block">
                                 {lab.description}
@@ -1658,16 +1691,17 @@ function App() {
                             )}
 
                             <small className="block">
-                              {lab.filename
-                                ? `📎 ${lab.filename
-                                    .split("_")
-                                    .slice(1)
-                                    .join("_")}`
+                              {lab.files.length
+                                ? `📎 ${fileNames(lab)}`
                                 : "file оруулаагүй"}
                             </small>
                           </span>
 
                           <span className="row-actions">
+                            <button onClick={() => setSubmissionsLab(lab)}>
+                              Илгээлтүүд
+                            </button>
+
                             <button
                               onClick={() => startEditingLab(lab)}
                             >
@@ -1724,6 +1758,51 @@ function App() {
     </div>
   )
 
+  // a lab as a tile, on the subject page and in search results
+  const labTile = (lab: Lab, onClick: () => void, subjectName?: string) => (
+    <button key={lab.id} className="tile" onClick={onClick}>
+      <span className="tile-title">{lab.title}</span>
+      {subjectName && (
+        <span className="tile-desc">
+          {subjectName}
+          {lab.teacher_name && ` · ${lab.teacher_name}`}
+        </span>
+      )}
+      {lab.description && (
+        <span className="tile-desc">{lab.description}</span>
+      )}
+      <span className="tile-badges">
+        {isNew(lab) && <span className="tile-badge new">Шинэ</span>}
+        {lab.files.length > 0 && (
+          <span className="tile-badge">{lab.files.length} файл</span>
+        )}
+      </span>
+    </button>
+  )
+
+  // search: lab title, description, teacher or subject name
+  const searchText = search.trim().toLowerCase()
+  const searchResults = searchText
+    ? allLabs.filter((lab) =>
+        [
+          lab.title,
+          lab.description,
+          lab.teacher_name,
+          subjects.find((subject) => subject.id === lab.subject_id)?.name,
+        ].some((text) => text?.toLowerCase().includes(searchText))
+      )
+    : []
+
+  async function openFromSearch(lab: Lab) {
+    const subject = subjects.find((item) => item.id === lab.subject_id)
+    if (!subject) return
+
+    await openSubject(subject)
+    // "back" from the lab returns to this teacher's labs
+    setSelectedTeacherKey(lab.teacher_id ? String(lab.teacher_id) : "none")
+    await openLab(lab)
+  }
+
   if (selectedLab) {
     return (
       <div>
@@ -1743,16 +1822,20 @@ function App() {
           <p>{selectedLab.description}</p>
         )}
 
-        {selectedLab.filename ? (
-          <>
-            <p>📎 Бэлэн байгаа file-ууд</p>
+        <LabFileList
+          key={selectedLab.id}
+          labId={selectedLab.id}
+          files={selectedLab.files}
+        />
 
-            <button onClick={downloadLab}>
-              file-ыг суулгах
-            </button>
-          </>
-        ) : (
-          <p>Ямарч лаб оруулаагүй байна.</p>
+        {selectedLab.accepts_submissions && (
+          <LabSubmission
+            key={selectedLab.id}
+            labId={selectedLab.id}
+            canSubmit={user.role === "student"}
+            open={selectedLab.submissions_open}
+            deadline={selectedLab.submission_deadline}
+          />
         )}
 
         <p>{message}</p>
@@ -1800,7 +1883,12 @@ function App() {
                 onClick={() => setSelectedTeacherKey(group.key)}
               >
                 <span className="tile-title">{group.name}</span>
-                <span className="tile-badge">{group.labs.length} лаб</span>
+                <span className="tile-badges">
+                  {countNew(group.labs) > 0 && (
+                    <span className="tile-badge new">{countNew(group.labs)} шинэ</span>
+                  )}
+                  <span className="tile-badge">{group.labs.length} лаб</span>
+                </span>
               </button>
             ))}
           </section>
@@ -1808,21 +1896,7 @@ function App() {
           <p>Энэ багш одоохондоо лаб оруулаагүй байна.</p>
         ) : (
           <section className="tile-grid">
-            {selectedGroup.labs.map((lab) => (
-              <button
-                key={lab.id}
-                className="tile"
-                onClick={() => openLab(lab)}
-              >
-                <span className="tile-title">{lab.title}</span>
-                {lab.description && (
-                  <span className="tile-desc">{lab.description}</span>
-                )}
-                {lab.filename && (
-                  <span className="tile-badge">файлтай</span>
-                )}
-              </button>
-            ))}
+            {selectedGroup.labs.map((lab) => labTile(lab, () => openLab(lab)))}
           </section>
         )}
       </div>
@@ -1840,31 +1914,78 @@ function App() {
             Тавтай морил, <strong>{user.username}</strong>!
           </span>
 
+          {!isAdmin(user) && (
+            <button onClick={() => setShowChangePassword(true)}>
+              Нууц үг солих
+            </button>
+          )}
+
           <button onClick={logout}>
             Бүртгэлээс гарах
           </button>
         </div>
       </header>
 
-      <h2>Хичээлүүд</h2>
+      <div className="inline-form lab-search">
+        <input
+          type="search"
+          aria-label="Лаб хайх"
+          placeholder="🔍 Лаб хайх: нэр, багш, хичээл..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </div>
 
-      {subjects.length === 0 ? (
-        <p>Ямарч хичээл алга.</p>
-      ) : (
-        <section className="tile-grid">
-          {subjects.map((subject) => (
-            <button
-              key={subject.id}
-              className="tile"
-              onClick={() => openSubject(subject)}
-            >
-              <span className="tile-title">{subject.name}</span>
-              {subject.teachers.length > 0 && (
-                <span className="tile-desc">{teacherNames(subject)}</span>
+      {searchText ? (
+        <>
+          <h2>Хайлтын үр дүн</h2>
+
+          {searchResults.length === 0 ? (
+            <p>"{search.trim()}" олдсонгүй.</p>
+          ) : (
+            <section className="tile-grid">
+              {searchResults.map((lab) =>
+                labTile(
+                  lab,
+                  () => openFromSearch(lab),
+                  subjects.find((subject) => subject.id === lab.subject_id)?.name
+                )
               )}
-            </button>
-          ))}
-        </section>
+            </section>
+          )}
+        </>
+      ) : (
+        <>
+          <h2>Хичээлүүд</h2>
+
+          {subjects.length === 0 ? (
+            <p>Ямарч хичээл алга.</p>
+          ) : (
+            <section className="tile-grid">
+              {subjects.map((subject) => {
+                const newLabs = countNew(
+                  allLabs.filter((lab) => lab.subject_id === subject.id)
+                )
+
+                return (
+                  <button
+                    key={subject.id}
+                    className="tile"
+                    onClick={() => openSubject(subject)}
+                  >
+                    <span className="tile-title">{subject.name}</span>
+                    {subject.teachers.length > 0 && (
+                      <span className="tile-desc">{teacherNames(subject)}</span>
+                    )}
+                    {newLabs > 0 && (
+                      <span className="tile-badge new">{newLabs} шинэ лаб</span>
+                    )}
+                  </button>
+                )
+              })}
+            </section>
+          )}
+        </>
       )}
     </div>
   )

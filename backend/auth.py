@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
 from jose import jwt, JWTError
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,9 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+# all a user with a temporary password may do until they choose a new one
+PASSWORD_CHANGE_PATHS = {"/me", "/me/password", "/logout"}
 
 def hash_password(password: str) -> str:
     password_bytes = password.encode("utf-8")
@@ -66,6 +69,7 @@ def create_access_token(data: dict):
 
 
 def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ):
@@ -102,6 +106,12 @@ def get_current_user(
     # "last active" in the log; the closest thing to a disconnect time when
     # someone just closes the tab instead of logging out
     touch_last_seen(db, user)
+
+    if user.must_change_password and request.url.path not in PASSWORD_CHANGE_PATHS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password change required"
+        )
 
     return user
 

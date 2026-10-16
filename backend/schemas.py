@@ -31,9 +31,20 @@ class UserResponse(BaseModel):
     is_admin: bool
     created_at: UtcDatetime | None = None
     last_seen_at: UtcDatetime | None = None
+    must_change_password: bool = False
 
     class Config:
         from_attributes = True
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class PasswordReset(BaseModel):
+    # shown once to the admin, who passes it on to the student
+    temporary_password: str
 
 
 class RoleUpdate(BaseModel):
@@ -119,6 +130,21 @@ class LabCreate(BaseModel):
     description: str = ""
     # which of the subject's teachers the lab belongs to
     teacher_id: int | None = None
+    # left out on an edit = unchanged
+    accepts_submissions: bool = False
+    submission_deadline: datetime | None = None
+
+
+class LabFileResponse(BaseModel):
+    id: int
+    original_name: str
+    size: int | None = None
+    created_at: UtcDatetime | None = None
+    # PDF or image: can be shown in the page
+    previewable: bool = False
+
+    class Config:
+        from_attributes = True
 
 
 class LabResponse(BaseModel):
@@ -126,9 +152,14 @@ class LabResponse(BaseModel):
     subject_id: int
     title: str
     description: str | None = None
-    filename: str | None = None
     teacher_id: int | None = None
     teacher_name: str | None = None
+    created_at: UtcDatetime | None = None
+    files: list[LabFileResponse] = []
+    accepts_submissions: bool = False
+    submission_deadline: UtcDatetime | None = None
+    # accepts submissions and the deadline has not passed
+    submissions_open: bool = False
 
     class Config:
         from_attributes = True
@@ -157,3 +188,22 @@ class UserActivitySummary(BaseModel):
     last_seen_at: UtcDatetime | None = None
     last_device: str | None = None
     downloads: int = 0
+
+
+class SubmissionResponse(BaseModel):
+    id: int
+    lab_id: int
+    original_name: str
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+
+    class Config:
+        from_attributes = True
+
+
+class LabSubmissionRow(BaseModel):
+    """One student of the lab's school, with their submission if any."""
+    user_id: int
+    username: str
+    email: str
+    submission: SubmissionResponse | None = None

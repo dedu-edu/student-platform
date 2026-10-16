@@ -75,6 +75,8 @@ export default function AdminUsers({
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
   const [isError, setIsError] = useState(false);
+  // shown once after a reset, so the admin can pass it on
+  const [tempPassword, setTempPassword] = useState<{ username: string; password: string } | null>(null);
 
   const report = (text: string, error = false) => {
     setStatus(text);
@@ -171,6 +173,26 @@ export default function AdminUsers({
   const accountFor = (email: string) =>
     users.find((u) => u.email.toLowerCase() === email.toLowerCase());
 
+  async function resetPassword(user: UserRow) {
+    if (
+      !window.confirm(
+        `${user.username}-ийн нууц үгийг сэргээх үү?\n\nТүр нууц үг үүснэ. Сурагч дараагийн удаа нэвтрэхдээ өөрийн шинэ нууц үгээ сонгоно.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const data = await api<{ temporary_password: string }>(
+        `/admin/users/${user.id}/reset-password`,
+        { method: "POST" },
+      );
+      setTempPassword({ username: user.username, password: data.temporary_password });
+      report("");
+    } catch (err) {
+      report(err instanceof Error ? err.message : "Алдаа гарлаа", true);
+    }
+  }
+
   async function deleteUser(user: UserRow) {
     if (
       !window.confirm(
@@ -214,6 +236,29 @@ export default function AdminUsers({
       </h2>
 
       <div className="win-body">
+        {section === "users" && tempPassword && (
+          <div className="temp-password" role="status">
+            <span>
+              <strong>{tempPassword.username}</strong>-ийн түр нууц үг:{" "}
+              <code>{tempPassword.password}</code>
+              <small className="block">
+                Үүнийг сурагчид өгнө үү. Энэ нууц үг дахин харагдахгүй.
+              </small>
+            </span>
+            <span className="row-actions">
+              <button
+                type="button"
+                onClick={() => void navigator.clipboard?.writeText(tempPassword.password)}
+              >
+                Хуулах
+              </button>
+              <button type="button" onClick={() => setTempPassword(null)}>
+                Хаах
+              </button>
+            </span>
+          </div>
+        )}
+
         {section === "users" &&
           (loading ? (
             <p>Ачаалж байна...</p>
@@ -261,9 +306,14 @@ export default function AdminUsers({
                       </select>
                     )}
                     {u.role !== "platform_admin" && u.id !== currentUserId && (
-                      <button type="button" onClick={() => deleteUser(u)}>
-                        Устгах
-                      </button>
+                      <>
+                        <button type="button" onClick={() => resetPassword(u)}>
+                          Нууц үг сэргээх
+                        </button>
+                        <button type="button" onClick={() => deleteUser(u)}>
+                          Устгах
+                        </button>
+                      </>
                     )}
                   </span>
                 </li>
